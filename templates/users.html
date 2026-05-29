@@ -55,7 +55,7 @@
               <td class="text-end">
                 {% if u['username'] != session['username'] %}
                 <form method="post" action="{{ url_for('delete_user', uid=u['id']) }}"
-                      onsubmit="return confirm('למחוק את המשתמש {{ u[\'username\'] }}?')">
+                      onsubmit="return confirm('למחוק את המשתמש {{ u.username }}?')">
                   <button class="btn btn-sm btn-outline-danger">
                     <i class="bi bi-trash"></i> מחק
                   </button>
