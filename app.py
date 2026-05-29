@@ -227,12 +227,21 @@ def entry():
             flash('הרשומה נשמרה בהצלחה', 'success')
             return redirect(url_for('entry'))
 
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = 50
+    offset = (page - 1) * per_page
     db = get_db()
-    recent = db.execute('SELECT * FROM transactions ORDER BY id DESC LIMIT 20').fetchall()
+    total = db.execute('SELECT COUNT(*) FROM transactions').fetchone()[0]
+    recent = db.execute(
+        'SELECT * FROM transactions ORDER BY id DESC LIMIT ? OFFSET ?',
+        (per_page, offset)
+    ).fetchall()
     db.close()
+    total_pages = (total + per_page - 1) // per_page
     return render_template('entry.html',
         books=BOOKS, months=MONTHS, statuses=STATUSES, types=TYPES,
-        items=ITEMS, recent=recent, month_labels=MONTH_LABELS)
+        items=ITEMS, recent=recent, month_labels=MONTH_LABELS,
+        page=page, total_pages=total_pages)
 
 
 @app.route('/entry/<int:tid>/edit', methods=['GET', 'POST'])
