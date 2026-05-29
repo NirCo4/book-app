@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import os
 
@@ -48,8 +50,16 @@ def get_db():
     return conn
 
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def status_filter_sql(status_filter):
-    """Return WHERE clause fragment for status filter."""
     if status_filter == 'תכנון':
         return "status = 'תכנון'"
     elif status_filter == 'בפועל':
@@ -57,9 +67,74 @@ def status_filter_sql(status_filter):
     return '1=1'
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'username' in session:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
+        db.close()
+        if user and check_password_hash(user['password_hash'], password):
+            session['username'] = user['username']
+            return redirect(url_for('dashboard'))
+        flash('שם משתמש או סיסמה שגויים', 'danger')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ── Users Management ──────────────────────────────────────────────────────────
+
+@app.route('/users', methods=['GET', 'POST'])
+@login_required
+def users():
+    db = get_db()
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        if not username or not password:
+            flash('יש למלא שם משתמש וסיסמה', 'danger')
+        elif db.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone():
+            flash(f'המשתמש "{username}" כבר קיים', 'danger')
+        else:
+            db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                       (username, generate_password_hash(password)))
+            db.commit()
+            flash(f'המשתמש "{username}" נוסף בהצלחה', 'success')
+
+    all_users = db.execute('SELECT id, username FROM users ORDER BY username').fetchall()
+    db.close()
+    return render_template('users.html', users=all_users)
+
+
+@app.route('/users/<int:uid>/delete', methods=['POST'])
+@login_required
+def delete_user(uid):
+    db = get_db()
+    user = db.execute('SELECT username FROM users WHERE id=?', (uid,)).fetchone()
+    if user and user['username'] == session['username']:
+        flash('לא ניתן למחוק את המשתמש הנוכחי', 'danger')
+    elif user:
+        db.execute('DELETE FROM users WHERE id=?', (uid,))
+        db.commit()
+        flash(f'המשתמש "{user["username"]}" נמחק', 'warning')
+    db.close()
+    return redirect(url_for('users'))
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.route('/')
+@login_required
 def dashboard():
     status = request.args.get('status', 'כל')
     sf = status_filter_sql(status)
@@ -82,7 +157,6 @@ def dashboard():
         GROUP BY month ORDER BY month
     ''').fetchall()
 
-    # Cumulative net and trough
     cumulative = 0
     trough = 0
     trough_month = None
@@ -111,6 +185,7 @@ def dashboard():
 # ── Data Entry ────────────────────────────────────────────────────────────────
 
 @app.route('/entry', methods=['GET', 'POST'])
+@login_required
 def entry():
     if request.method == 'POST':
         month = request.form.get('month', '').strip()
@@ -122,16 +197,11 @@ def entry():
         notes = request.form.get('notes', '').strip()
 
         errors = []
-        if not month:
-            errors.append('יש לבחור חודש')
-        if not book:
-            errors.append('יש לבחור ספר')
-        if not status:
-            errors.append('יש לבחור סטטוס')
-        if not ttype:
-            errors.append('יש לבחור סוג תנועה')
-        if not item:
-            errors.append('יש לבחור פריט')
+        if not month:   errors.append('יש לבחור חודש')
+        if not book:    errors.append('יש לבחור ספר')
+        if not status:  errors.append('יש לבחור סטטוס')
+        if not ttype:   errors.append('יש לבחור סוג תנועה')
+        if not item:    errors.append('יש לבחור פריט')
         try:
             amount = float(amount_str) if amount_str else None
             if amount is None or amount <= 0:
@@ -147,18 +217,18 @@ def entry():
             accounting = amount if ttype == 'הכנסה' else -amount
             db = get_db()
             db.execute('''
-                INSERT INTO transactions (month, book, status, type, item, amount_positive, amount_accounting, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (month, book, status, ttype, item, amount, accounting, notes or None))
+                INSERT INTO transactions
+                    (month, book, status, type, item, amount_positive, amount_accounting, notes, entered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (month, book, status, ttype, item, amount, accounting,
+                  notes or None, session['username']))
             db.commit()
             db.close()
             flash('הרשומה נשמרה בהצלחה', 'success')
             return redirect(url_for('entry'))
 
     db = get_db()
-    recent = db.execute('''
-        SELECT * FROM transactions ORDER BY id DESC LIMIT 20
-    ''').fetchall()
+    recent = db.execute('SELECT * FROM transactions ORDER BY id DESC LIMIT 20').fetchall()
     db.close()
     return render_template('entry.html',
         books=BOOKS, months=MONTHS, statuses=STATUSES, types=TYPES,
@@ -166,6 +236,7 @@ def entry():
 
 
 @app.route('/entry/<int:tid>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_entry(tid):
     db = get_db()
     row = db.execute('SELECT * FROM transactions WHERE id=?', (tid,)).fetchone()
@@ -182,7 +253,6 @@ def edit_entry(tid):
         item = request.form.get('item', '').strip()
         amount_str = request.form.get('amount', '').strip()
         notes = request.form.get('notes', '').strip()
-
         try:
             amount = float(amount_str)
         except ValueError:
@@ -194,7 +264,8 @@ def edit_entry(tid):
         accounting = amount if ttype == 'הכנסה' else -amount
         db.execute('''
             UPDATE transactions
-            SET month=?, book=?, status=?, type=?, item=?, amount_positive=?, amount_accounting=?, notes=?
+            SET month=?, book=?, status=?, type=?, item=?,
+                amount_positive=?, amount_accounting=?, notes=?
             WHERE id=?
         ''', (month, book, status, ttype, item, amount, accounting, notes or None, tid))
         db.commit()
@@ -209,6 +280,7 @@ def edit_entry(tid):
 
 
 @app.route('/entry/<int:tid>/delete', methods=['POST'])
+@login_required
 def delete_entry(tid):
     db = get_db()
     db.execute('DELETE FROM transactions WHERE id=?', (tid,))
@@ -221,6 +293,7 @@ def delete_entry(tid):
 # ── Monthly Summary ───────────────────────────────────────────────────────────
 
 @app.route('/monthly')
+@login_required
 def monthly():
     status = request.args.get('status', 'כל')
     sf = status_filter_sql(status)
@@ -235,7 +308,6 @@ def monthly():
         GROUP BY month ORDER BY month
     ''').fetchall()
 
-    # Cashflow view (status=תזרים only)
     cf_rows = db.execute('''
         SELECT month,
             COALESCE(SUM(CASE WHEN type="הכנסה" THEN amount_accounting ELSE 0 END), 0) AS income,
@@ -266,6 +338,7 @@ def monthly():
 # ── Book Summary ──────────────────────────────────────────────────────────────
 
 @app.route('/book-summary')
+@login_required
 def book_summary():
     status = request.args.get('status', 'כל')
     sf = status_filter_sql(status)
@@ -295,6 +368,7 @@ def book_summary():
 # ── Matrix ────────────────────────────────────────────────────────────────────
 
 @app.route('/matrix')
+@login_required
 def matrix():
     status = request.args.get('status', 'כל')
     view = request.args.get('view', 'נטו')
@@ -315,12 +389,9 @@ def matrix():
     ''').fetchall()
     db.close()
 
-    # Get distinct months that have data
     data_months = sorted({r['month'] for r in rows})
-    # Use all configured months but only show ones with data (or all months)
     use_months = [m for m in MONTHS if m in data_months] or data_months
 
-    # Build pivot dict
     pivot = {}
     for r in rows:
         pivot.setdefault(r['book'], {})[r['month']] = r['value']
@@ -328,11 +399,9 @@ def matrix():
     matrix_rows = []
     for book in BOOKS:
         if book not in pivot and not any(r['book'] == book for r in rows):
-            # Skip books with zero data unless explicitly listed
             continue
         month_vals = [pivot.get(book, {}).get(m, 0) for m in use_months]
-        total = sum(month_vals)
-        matrix_rows.append({'book': book, 'vals': month_vals, 'total': total})
+        matrix_rows.append({'book': book, 'vals': month_vals, 'total': sum(month_vals)})
 
     col_totals = [sum(r['vals'][i] for r in matrix_rows) for i in range(len(use_months))]
     grand_total = sum(col_totals)
@@ -346,11 +415,13 @@ def matrix():
 # ── API ───────────────────────────────────────────────────────────────────────
 
 @app.route('/api/books')
+@login_required
 def api_books():
     return jsonify(BOOKS)
 
 
 @app.route('/api/items')
+@login_required
 def api_items():
     return jsonify(ITEMS)
 

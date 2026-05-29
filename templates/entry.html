@@ -116,6 +116,7 @@
                 <th>פריט</th>
                 <th class="text-end">סכום</th>
                 <th>סטטוס</th>
+                <th>הוזן ע"י</th>
                 <th></th>
               </tr>
             </thead>
@@ -130,6 +131,7 @@
                   {% if r['type']=='הוצאה' %}({% endif %}{{ "{:,.0f}".format(r['amount_positive']|float) }}{% if r['type']=='הוצאה' %}){% endif %}
                 </td>
                 <td><span class="badge status-badge-{{ r['status'] }}">{{ r['status'] }}</span></td>
+                <td class="small text-muted">{{ r['entered_by'] or '—' }}</td>
                 <td class="text-end">
                   <a href="{{ url_for('edit_entry', tid=r['id']) }}" class="btn btn-xs btn-outline-secondary me-1" title="עריכה">
                     <i class="bi bi-pencil"></i>

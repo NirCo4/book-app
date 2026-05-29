@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}ניהול משתמשים{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+
+    <h2 class="mb-4"><i class="bi bi-people me-2"></i>ניהול משתמשים</h2>
+
+    <!-- Add user -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>הוספת משתמש</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" class="row g-3">
+          <div class="col-sm-5">
+            <label class="form-label fw-semibold">שם משתמש</label>
+            <input type="text" name="username" class="form-control" required placeholder="לדוגמה: sarah">
+          </div>
+          <div class="col-sm-5">
+            <label class="form-label fw-semibold">סיסמה</label>
+            <input type="password" name="password" class="form-control" required placeholder="לפחות 4 תווים">
+          </div>
+          <div class="col-sm-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">הוסף</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Users list -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">משתמשים קיימים</h5>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-secondary">
+            <tr>
+              <th>שם משתמש</th>
+              <th class="text-end"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td class="align-middle">
+                <i class="bi bi-person-circle me-2 text-muted"></i>
+                {{ u['username'] }}
+                {% if u['username'] == session['username'] %}
+                  <span class="badge bg-success ms-2">אתה</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                {% if u['username'] != session['username'] %}
+                <form method="post" action="{{ url_for('delete_user', uid=u['id']) }}"
+                      onsubmit="return confirm('למחוק את המשתמש {{ u[\'username\'] }}?')">
+                  <button class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash"></i> מחק
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
