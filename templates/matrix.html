@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}מטריצה ספר–חודש{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-table me-2"></i>מטריצת ספר × חודש</h2>
+  <form class="d-flex align-items-center gap-2 flex-wrap" method="get">
+    <label class="fw-semibold">סינון סטטוס:</label>
+    <select name="status" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option {% if status=='כל' %}selected{% endif %}>כל</option>
+      <option {% if status=='תכנון' %}selected{% endif %}>תכנון</option>
+      <option {% if status=='בפועל' %}selected{% endif %}>בפועל</option>
+    </select>
+    <label class="fw-semibold me-2">תצוגה:</label>
+    <select name="view" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option {% if view=='נטו' %}selected{% endif %}>נטו</option>
+      <option {% if view=='הכנסות' %}selected{% endif %}>הכנסות</option>
+      <option {% if view=='הוצאות' %}selected{% endif %}>הוצאות</option>
+    </select>
+  </form>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm matrix-table mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th class="sticky-col">ספר \ חודש</th>
+            {% for m in months %}
+            <th class="text-end">{{ month_labels.get(m, m) }}</th>
+            {% endfor %}
+            <th class="text-end table-warning">סה״כ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="sticky-col fw-semibold">{{ row.book }}</td>
+            {% for v in row.vals %}
+            <td class="text-end {% if v > 0 %}text-success{% elif v < 0 %}text-danger{% else %}text-muted{% endif %}">
+              {% if v != 0 %}{{ "{:,.0f}".format(v) }}{% else %}—{% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-end fw-bold table-warning {% if row.total >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.total) }}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="99" class="text-center text-muted py-3">אין נתונים</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td class="sticky-col">סה״כ</td>
+            {% for ct in col_totals %}
+            <td class="text-end {% if ct >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {% if ct != 0 %}{{ "{:,.0f}".format(ct) }}{% else %}—{% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-end table-warning {% if grand_total >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(grand_total) }}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

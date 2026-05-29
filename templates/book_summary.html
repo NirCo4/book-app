@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}סיכום לפי ספר{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="mb-0"><i class="bi bi-journals me-2"></i>סיכום לפי ספר</h2>
+  <form class="d-flex align-items-center gap-2" method="get">
+    <label class="fw-semibold">סינון סטטוס:</label>
+    <select name="status" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option {% if status=='כל' %}selected{% endif %}>כל</option>
+      <option {% if status=='תכנון' %}selected{% endif %}>תכנון</option>
+      <option {% if status=='בפועל' %}selected{% endif %}>בפועל</option>
+    </select>
+  </form>
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th>ספר</th>
+                <th class="text-end">הכנסות</th>
+                <th class="text-end">הוצאות</th>
+                <th class="text-end">נטו</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td>{{ r['book'] }}</td>
+                <td class="text-end text-success">{{ "{:,.0f}".format(r['income']) }}</td>
+                <td class="text-end text-danger">{{ "{:,.0f}".format(r['expenses']) }}</td>
+                <td class="text-end fw-semibold {% if r['net'] >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ "{:,.0f}".format(r['net']) }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted py-3">אין נתונים</td></tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="table-secondary fw-bold">
+              <tr>
+                <td>סה״כ</td>
+                <td class="text-end text-success">{{ "{:,.0f}".format(total_income) }}</td>
+                <td class="text-end text-danger">{{ "{:,.0f}".format(total_expenses) }}</td>
+                <td class="text-end {% if total_net >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ "{:,.0f}".format(total_net) }}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-title mb-3">נטו לפי ספר</h6>
+        <canvas id="bookChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const bookLabels = {{ rows | map(attribute='book') | list | tojson }};
+const netVals    = {{ rows | map(attribute='net')  | list | tojson }};
+
+new Chart(document.getElementById('bookChart'), {
+  type: 'bar',
+  data: {
+    labels: bookLabels,
+    datasets: [{
+      label: 'נטו',
+      data: netVals,
+      backgroundColor: netVals.map(v => v >= 0 ? 'rgba(25,135,84,0.7)' : 'rgba(220,53,69,0.7)'),
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { callback: v => v.toLocaleString('he-IL') } },
+      y: { ticks: { font: { size: 11 } } }
+    }
+  }
+});
+</script>
+{% endblock %}

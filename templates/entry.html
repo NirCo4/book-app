@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}הזנת נתונים{% endblock %}
+{% block content %}
+
+<div class="row g-4">
+  <!-- Form -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>הזנת תנועה חדשה</h5>
+      </div>
+      <div class="card-body">
+
+        <!-- Barcode scanner input (future integration) -->
+        <div class="mb-3 barcode-section">
+          <label class="form-label text-muted small">
+            <i class="bi bi-upc-scan me-1"></i>סריקת ברקוד (עתידי)
+          </label>
+          <input type="text" id="barcodeInput" class="form-control form-control-sm"
+                 placeholder="הנח את הסמן כאן וסרוק ברקוד..." disabled
+                 title="חיבור לסורק ברקוד — זמין בגרסה הבאה">
+          <div class="form-text text-muted">שדה זה מיועד לחיבור עתידי לסורק ברקוד</div>
+        </div>
+
+        <hr>
+
+        <form method="post" id="entryForm">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">חודש <span class="text-danger">*</span></label>
+            <select name="month" class="form-select" required>
+              <option value="">— בחר חודש —</option>
+              {% for m in months %}
+              <option value="{{ m }}">{{ month_labels[m] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ספר <span class="text-danger">*</span></label>
+            <select name="book" class="form-select" required>
+              <option value="">— בחר ספר —</option>
+              {% for b in books %}
+              <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label fw-semibold">סטטוס <span class="text-danger">*</span></label>
+              <select name="status" class="form-select" required>
+                <option value="">— בחר —</option>
+                {% for s in statuses %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label fw-semibold">סוג תנועה <span class="text-danger">*</span></label>
+              <select name="type" id="typeSelect" class="form-select" required>
+                <option value="">— בחר —</option>
+                {% for t in types %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">פריט <span class="text-danger">*</span></label>
+            <select name="item" class="form-select" required>
+              <option value="">— בחר פריט —</option>
+              {% for i in items %}
+              <option value="{{ i }}">{{ i }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">סכום (חיובי) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text">₪</span>
+              <input type="number" name="amount" class="form-control" min="0.01"
+                     step="0.01" placeholder="0.00" required>
+            </div>
+            <div class="form-text" id="amountHint"></div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">הערות</label>
+            <input type="text" name="notes" class="form-control" placeholder="הערה אופציונלית">
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-save me-1"></i> שמור תנועה
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent entries -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>תנועות אחרונות</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-secondary">
+              <tr>
+                <th>#</th>
+                <th>חודש</th>
+                <th>ספר</th>
+                <th>פריט</th>
+                <th class="text-end">סכום</th>
+                <th>סטטוס</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in recent %}
+              <tr>
+                <td class="text-muted small">{{ r['id'] }}</td>
+                <td class="small">{{ month_labels.get(r['month'], r['month']) }}</td>
+                <td class="small">{{ r['book'] }}</td>
+                <td class="small">{{ r['item'] }}</td>
+                <td class="text-end small {% if r['type']=='הכנסה' %}text-success{% else %}text-danger{% endif %}">
+                  {% if r['type']=='הוצאה' %}({% endif %}{{ "{:,.0f}".format(r['amount_positive']|float) }}{% if r['type']=='הוצאה' %}){% endif %}
+                </td>
+                <td><span class="badge status-badge-{{ r['status'] }}">{{ r['status'] }}</span></td>
+                <td class="text-end">
+                  <a href="{{ url_for('edit_entry', tid=r['id']) }}" class="btn btn-xs btn-outline-secondary me-1" title="עריכה">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <form method="post" action="{{ url_for('delete_entry', tid=r['id']) }}"
+                        class="d-inline" onsubmit="return confirm('למחוק רשומה זו?')">
+                    <button class="btn btn-xs btn-outline-danger" title="מחיקה">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="7" class="text-center text-muted py-3">אין נתונים</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('typeSelect').addEventListener('change', function() {
+  const hint = document.getElementById('amountHint');
+  hint.textContent = this.value === 'הוצאה'
+    ? 'הסכום החשבונאי יירשם כשלילי אוטומטית'
+    : this.value === 'הכנסה' ? 'הסכום החשבונאי יירשם כחיובי' : '';
+});
+</script>
+{% endblock %}

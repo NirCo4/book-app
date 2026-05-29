@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}דשבורד{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>דשבורד — תזרים שנתי 2026</h2>
+  <form class="d-flex align-items-center gap-2" method="get">
+    <label class="fw-semibold">סינון סטטוס:</label>
+    <select name="status" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option {% if status=='כל' %}selected{% endif %}>כל</option>
+      <option {% if status=='תכנון' %}selected{% endif %}>תכנון</option>
+      <option {% if status=='בפועל' %}selected{% endif %}>בפועל</option>
+    </select>
+  </form>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card kpi-card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="kpi-label text-muted">סה״כ הכנסות (שנה)</div>
+        <div class="kpi-value text-success">{{ "{:,.0f}".format(totals['total_income']) }} ₪</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card kpi-card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="kpi-label text-muted">סה״כ הוצאות (שנה)</div>
+        <div class="kpi-value text-danger">{{ "{:,.0f}".format(totals['total_expenses']) }} ₪</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card kpi-card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="kpi-label text-muted">נטו (שנה)</div>
+        <div class="kpi-value {% if totals['net'] >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ "{:,.0f}".format(totals['net']) }} ₪
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card kpi-card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="kpi-label text-muted">שפל תזרים מצטבר</div>
+        <div class="kpi-value text-danger">{{ "{:,.0f}".format(trough) }} ₪</div>
+        <div class="text-muted small">{{ trough_month or '—' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">נטו חודשי ומצטבר</h5>
+    <canvas id="monthlyChart" height="100"></canvas>
+  </div>
+</div>
+
+<!-- Monthly table -->
+{% if monthly %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>חודש</th>
+            <th class="text-end">הכנסות</th>
+            <th class="text-end">הוצאות</th>
+            <th class="text-end">נטו</th>
+            <th class="text-end">נטו מצטבר</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in monthly %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(row.income) }}</td>
+            <td class="text-end text-danger">{{ "{:,.0f}".format(row.expenses) }}</td>
+            <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.net) }}
+            </td>
+            <td class="text-end {% if row.cumulative >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.cumulative) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info">אין נתונים להצגה.</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+const labels = {{ monthly | map(attribute='label') | list | tojson }};
+const netData = {{ monthly | map(attribute='net') | list | tojson }};
+const cumData = {{ monthly | map(attribute='cumulative') | list | tojson }};
+
+new Chart(document.getElementById('monthlyChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [
+      {
+        label: 'נטו חודשי',
+        data: netData,
+        backgroundColor: netData.map(v => v >= 0 ? 'rgba(25,135,84,0.7)' : 'rgba(220,53,69,0.7)'),
+        order: 2,
+      },
+      {
+        label: 'נטו מצטבר',
+        data: cumData,
+        type: 'line',
+        borderColor: '#0d6efd',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 4,
+        order: 1,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: {
+      x: { ticks: { font: { family: 'Segoe UI' } } },
+      y: { ticks: { callback: v => v.toLocaleString('he-IL') } }
+    }
+  }
+});
+</script>
+{% endblock %}

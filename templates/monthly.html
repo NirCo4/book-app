@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}סיכום חודשי{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="mb-0"><i class="bi bi-calendar3 me-2"></i>סיכום חודשי</h2>
+  <form class="d-flex align-items-center gap-2" method="get">
+    <label class="fw-semibold">סינון סטטוס:</label>
+    <select name="status" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option {% if status=='כל' %}selected{% endif %}>כל</option>
+      <option {% if status=='תכנון' %}selected{% endif %}>תכנון</option>
+      <option {% if status=='בפועל' %}selected{% endif %}>בפועל</option>
+    </select>
+  </form>
+</div>
+
+<!-- Accounting Summary -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-light">
+    <h5 class="mb-0">סיכום חשבונאי חודשי ({{ status }})</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>חודש</th>
+            <th class="text-end">הכנסות</th>
+            <th class="text-end">הוצאות</th>
+            <th class="text-end">נטו</th>
+            <th class="text-end">נטו מצטבר</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(total_inc=0, total_exp=0, total_net=0) %}
+          {% for row in accounting %}
+          {% set ns.total_inc = ns.total_inc + row.income %}
+          {% set ns.total_exp = ns.total_exp + row.expenses %}
+          {% set ns.total_net = ns.total_net + row.net %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(row.income) }}</td>
+            <td class="text-end text-danger">{{ "{:,.0f}".format(row.expenses) }}</td>
+            <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.net) }}
+            </td>
+            <td class="text-end {% if row.cumulative >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.cumulative) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td>סה״כ</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(ns.total_inc) }}</td>
+            <td class="text-end text-danger">{{ "{:,.0f}".format(ns.total_exp) }}</td>
+            <td class="text-end {% if ns.total_net >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(ns.total_net) }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Cashflow Summary -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-light">
+    <h5 class="mb-0">סיכום תזרימי חודשי <span class="badge bg-secondary">סטטוס: תזרים בלבד</span></h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>חודש</th>
+            <th class="text-end">הכנסות</th>
+            <th class="text-end">הוצאות</th>
+            <th class="text-end">נטו</th>
+            <th class="text-end">נטו מצטבר</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns2 = namespace(total_inc=0, total_exp=0, total_net=0) %}
+          {% for row in cashflow %}
+          {% set ns2.total_inc = ns2.total_inc + row.income %}
+          {% set ns2.total_exp = ns2.total_exp + row.expenses %}
+          {% set ns2.total_net = ns2.total_net + row.net %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(row.income) }}</td>
+            <td class="text-end text-danger">{{ "{:,.0f}".format(row.expenses) }}</td>
+            <td class="text-end {% if row.net >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.net) }}
+            </td>
+            <td class="text-end {% if row.cumulative >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(row.cumulative) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td>סה״כ</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(ns2.total_inc) }}</td>
+            <td class="text-end text-danger">{{ "{:,.0f}".format(ns2.total_exp) }}</td>
+            <td class="text-end {% if ns2.total_net >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(ns2.total_net) }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

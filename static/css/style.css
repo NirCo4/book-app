@@ -1,0 +1,58 @@
+:root {
+  --font-main: 'Segoe UI', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-main);
+  background: #f4f6f9;
+  color: #212529;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────── */
+.navbar-brand { font-size: 1.15rem; }
+.navbar .nav-link { font-size: 0.93rem; }
+.navbar .nav-link.active { font-weight: 600; }
+
+/* ── KPI Cards ───────────────────────────────────────────────── */
+.kpi-card { border-radius: 12px; transition: transform 0.15s; }
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-label { font-size: 0.82rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.kpi-value { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card { border-radius: 10px; }
+.card-header { border-radius: 10px 10px 0 0 !important; font-weight: 600; }
+
+/* ── Tables ──────────────────────────────────────────────────── */
+.table th { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+.table td { font-size: 0.9rem; vertical-align: middle; }
+
+/* Matrix sticky first column */
+.matrix-table .sticky-col {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  z-index: 1;
+  min-width: 180px;
+  border-left: 2px solid #dee2e6;
+}
+.matrix-table thead .sticky-col { background: #212529; border-left-color: #444; }
+.matrix-table tfoot .sticky-col { background: #e9ecef; }
+
+/* ── Status Badges ───────────────────────────────────────────── */
+.status-badge-תכנון    { background: #0d6efd; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 0.78rem; }
+.status-badge-תזרים    { background: #198754; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 0.78rem; }
+.status-badge-חשבונאי  { background: #6c757d; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 0.78rem; }
+
+/* ── Tiny buttons in table ───────────────────────────────────── */
+.btn-xs { padding: 1px 6px; font-size: 0.75rem; }
+
+/* ── Barcode section ─────────────────────────────────────────── */
+.barcode-section { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; }
+.barcode-section input:disabled { background: #e9ecef; cursor: not-allowed; }
+
+/* ── Responsive matrix ───────────────────────────────────────── */
+.table-responsive { border-radius: 0 0 10px 10px; }
+
+/* ── Alerts ──────────────────────────────────────────────────── */
+.alert { border-radius: 8px; }
