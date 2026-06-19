@@ -9,6 +9,7 @@ app.secret_key = 'books-store-2026'
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'books.db')
 
+# Kept for fallback ordering in legacy reports
 BOOKS = [
     'סופרות בטרם עת', 'גן עדן לחתולים', 'קמצנים, חמדנים, עסקנים',
     'שני סיפורים נודדים', 'מקאריו', 'דרכים חלופיות', 'עץ הקיפודים',
@@ -43,10 +44,16 @@ MONTH_LABELS = {
     '2027-04': 'אפריל 2027', '2027-05': 'מאי 2027', '2027-06': 'יוני 2027',
 }
 
+BOOK_STATUSES = ['טיוטה', 'בייצור', 'יצא לאור', 'אזל']
+PRODUCTION_STAGES_LIST = ['כתב יד', 'עריכה', 'הגהה', 'עימוד', 'עיצוב כריכה', 'דפוס', 'הפצה']
+PRODUCTION_STATUSES = ['ממתין', 'בתהליך', 'הושלם', 'עיכוב']
+AUTHOR_ROLES = ['מחבר', 'מחברת', 'מתרגם', 'מתרגמת', 'מאייר', 'מאיירת', 'עורך', 'עורכת']
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 
@@ -65,6 +72,19 @@ def status_filter_sql(status_filter):
     elif status_filter == 'בפועל':
         return "status != 'תכנון'"
     return '1=1'
+
+
+def get_books_list():
+    """Return active book titles from DB for dropdowns."""
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT title FROM books WHERE status != 'טיוטה' ORDER BY title"
+        ).fetchall()
+        db.close()
+        return [r['title'] for r in rows] or BOOKS
+    except Exception:
+        return BOOKS
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -92,7 +112,7 @@ def logout():
     return redirect(url_for('login'))
 
 
-# ── Users Management ──────────────────────────────────────────────────────────
+# ── Users ─────────────────────────────────────────────────────────────────────
 
 @app.route('/users', methods=['GET', 'POST'])
 @login_required
@@ -110,7 +130,6 @@ def users():
                        (username, generate_password_hash(password)))
             db.commit()
             flash(f'המשתמש "{username}" נוסף בהצלחה', 'success')
-
     all_users = db.execute('SELECT id, username FROM users ORDER BY username').fetchall()
     db.close()
     return render_template('users.html', users=all_users)
@@ -239,7 +258,7 @@ def entry():
     db.close()
     total_pages = (total + per_page - 1) // per_page
     return render_template('entry.html',
-        books=BOOKS, months=MONTHS, statuses=STATUSES, types=TYPES,
+        books=get_books_list(), months=MONTHS, statuses=STATUSES, types=TYPES,
         items=ITEMS, recent=recent, month_labels=MONTH_LABELS,
         page=page, total_pages=total_pages)
 
@@ -267,7 +286,7 @@ def edit_entry(tid):
         except ValueError:
             flash('סכום לא תקין', 'danger')
             return render_template('entry_edit.html', row=row,
-                books=BOOKS, months=MONTHS, statuses=STATUSES,
+                books=get_books_list(), months=MONTHS, statuses=STATUSES,
                 types=TYPES, items=ITEMS, month_labels=MONTH_LABELS)
 
         accounting = amount if ttype == 'הכנסה' else -amount
@@ -284,7 +303,7 @@ def edit_entry(tid):
 
     db.close()
     return render_template('entry_edit.html', row=row,
-        books=BOOKS, months=MONTHS, statuses=STATUSES,
+        books=get_books_list(), months=MONTHS, statuses=STATUSES,
         types=TYPES, items=ITEMS, month_labels=MONTH_LABELS)
 
 
@@ -358,10 +377,7 @@ def book_summary():
             COALESCE(SUM(CASE WHEN type="הוצאה" THEN amount_accounting ELSE 0 END), 0) AS expenses,
             COALESCE(SUM(amount_accounting), 0) AS net
         FROM transactions WHERE {sf}
-        GROUP BY book
-        ORDER BY CASE book
-            {' '.join(f"WHEN '{b}' THEN {i}" for i, b in enumerate(BOOKS))}
-            ELSE 999 END
+        GROUP BY book ORDER BY book
     ''').fetchall()
     db.close()
 
@@ -396,8 +412,13 @@ def matrix():
         FROM transactions WHERE {sf}
         GROUP BY book, month
     ''').fetchall()
+
+    db_books = [r['title'] for r in db.execute(
+        'SELECT title FROM books ORDER BY title'
+    ).fetchall()]
     db.close()
 
+    books_order = db_books or BOOKS
     data_months = sorted({r['month'] for r in rows})
     use_months = [m for m in MONTHS if m in data_months] or data_months
 
@@ -406,11 +427,16 @@ def matrix():
         pivot.setdefault(r['book'], {})[r['month']] = r['value']
 
     matrix_rows = []
-    for book in BOOKS:
-        if book not in pivot and not any(r['book'] == book for r in rows):
-            continue
-        month_vals = [pivot.get(book, {}).get(m, 0) for m in use_months]
-        matrix_rows.append({'book': book, 'vals': month_vals, 'total': sum(month_vals)})
+    seen = set()
+    for book in books_order:
+        if book in pivot:
+            seen.add(book)
+            month_vals = [pivot.get(book, {}).get(m, 0) for m in use_months]
+            matrix_rows.append({'book': book, 'vals': month_vals, 'total': sum(month_vals)})
+    for book in pivot:
+        if book not in seen:
+            month_vals = [pivot.get(book, {}).get(m, 0) for m in use_months]
+            matrix_rows.append({'book': book, 'vals': month_vals, 'total': sum(month_vals)})
 
     col_totals = [sum(r['vals'][i] for r in matrix_rows) for i in range(len(use_months))]
     grand_total = sum(col_totals)
@@ -421,12 +447,765 @@ def matrix():
         status=status, view=view)
 
 
+# ── Catalog ───────────────────────────────────────────────────────────────────
+
+@app.route('/catalog')
+@login_required
+def catalog():
+    db = get_db()
+    q = request.args.get('q', '').strip()
+    status_f = request.args.get('status', '')
+    cat_f = request.args.get('category', '')
+    ser_f = request.args.get('series', '')
+
+    sql = '''
+        SELECT b.*, c.name AS category_name, s.name AS series_name,
+               COALESCE(inv.stock_quantity, 0) AS stock,
+               GROUP_CONCAT(a.name, ', ') AS authors
+        FROM books b
+        LEFT JOIN categories c ON b.category_id = c.id
+        LEFT JOIN series s ON b.series_id = s.id
+        LEFT JOIN inventory inv ON b.id = inv.book_id
+        LEFT JOIN book_authors ba ON b.id = ba.book_id
+        LEFT JOIN authors a ON ba.author_id = a.id
+        WHERE 1=1
+    '''
+    params = []
+    if q:
+        sql += ' AND b.title LIKE ?'
+        params.append(f'%{q}%')
+    if status_f:
+        sql += ' AND b.status = ?'
+        params.append(status_f)
+    if cat_f:
+        sql += ' AND b.category_id = ?'
+        params.append(cat_f)
+    if ser_f:
+        sql += ' AND b.series_id = ?'
+        params.append(ser_f)
+    sql += ' GROUP BY b.id ORDER BY b.title'
+
+    books = db.execute(sql, params).fetchall()
+    categories = db.execute('SELECT * FROM categories ORDER BY name').fetchall()
+    series = db.execute('SELECT * FROM series ORDER BY name').fetchall()
+    db.close()
+    return render_template('catalog.html', books=books,
+        categories=categories, series=series,
+        book_statuses=BOOK_STATUSES, q=q,
+        status_f=status_f, cat_f=cat_f, ser_f=ser_f)
+
+
+@app.route('/catalog/add', methods=['GET', 'POST'])
+@login_required
+def catalog_add():
+    db = get_db()
+    categories = db.execute('SELECT * FROM categories ORDER BY name').fetchall()
+    series = db.execute('SELECT * FROM series ORDER BY name').fetchall()
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        if not title:
+            flash('שם הספר הוא שדה חובה', 'danger')
+        elif db.execute('SELECT id FROM books WHERE title=?', (title,)).fetchone():
+            flash('ספר עם שם זה כבר קיים', 'danger')
+        else:
+            cur = db.execute('''
+                INSERT INTO books (title, isbn, description, cover_image_url,
+                    publication_date, list_price, status, category_id, series_id, series_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                title,
+                request.form.get('isbn', '').strip() or None,
+                request.form.get('description', '').strip() or None,
+                request.form.get('cover_image_url', '').strip() or None,
+                request.form.get('publication_date', '').strip() or None,
+                float(request.form.get('list_price') or 0) or None,
+                request.form.get('status', 'טיוטה'),
+                request.form.get('category_id') or None,
+                request.form.get('series_id') or None,
+                request.form.get('series_order') or None,
+            ))
+            book_id = cur.lastrowid
+            # Create inventory record
+            db.execute('INSERT OR IGNORE INTO inventory (book_id) VALUES (?)', (book_id,))
+            # Auto-create production stages
+            for i, stage in enumerate(PRODUCTION_STAGES_LIST):
+                db.execute('''
+                    INSERT INTO production_stages (book_id, stage, status)
+                    VALUES (?, ?, 'ממתין')
+                ''', (book_id, stage))
+            db.commit()
+            db.close()
+            flash(f'הספר "{title}" נוסף בהצלחה', 'success')
+            return redirect(url_for('catalog_detail', bid=book_id))
+
+    db.close()
+    return render_template('catalog_form.html',
+        book=None, categories=categories, series=series,
+        book_statuses=BOOK_STATUSES)
+
+
+@app.route('/catalog/<int:bid>')
+@login_required
+def catalog_detail(bid):
+    db = get_db()
+    book = db.execute('''
+        SELECT b.*, c.name AS category_name, s.name AS series_name,
+               COALESCE(inv.stock_quantity, 0) AS stock,
+               inv.reorder_threshold
+        FROM books b
+        LEFT JOIN categories c ON b.category_id = c.id
+        LEFT JOIN series s ON b.series_id = s.id
+        LEFT JOIN inventory inv ON b.id = inv.book_id
+        WHERE b.id = ?
+    ''', (bid,)).fetchone()
+    if not book:
+        db.close()
+        flash('ספר לא נמצא', 'danger')
+        return redirect(url_for('catalog'))
+
+    book_authors = db.execute('''
+        SELECT a.id, a.name, ba.role, ba.royalty_pct
+        FROM book_authors ba JOIN authors a ON ba.author_id = a.id
+        WHERE ba.book_id = ? ORDER BY a.name
+    ''', (bid,)).fetchall()
+
+    all_authors = db.execute('SELECT id, name FROM authors ORDER BY name').fetchall()
+
+    stages = db.execute('''
+        SELECT * FROM production_stages WHERE book_id = ?
+        ORDER BY CASE stage
+            WHEN 'כתב יד' THEN 1 WHEN 'עריכה' THEN 2 WHEN 'הגהה' THEN 3
+            WHEN 'עימוד' THEN 4 WHEN 'עיצוב כריכה' THEN 5
+            WHEN 'דפוס' THEN 6 WHEN 'הפצה' THEN 7 ELSE 8 END
+    ''', (bid,)).fetchall()
+
+    print_runs = db.execute('''
+        SELECT * FROM print_runs WHERE book_id = ? ORDER BY run_date DESC
+    ''', (bid,)).fetchall()
+
+    financials = db.execute('''
+        SELECT
+            COALESCE(SUM(CASE WHEN type="הכנסה" THEN amount_accounting ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN type="הוצאה" THEN amount_accounting ELSE 0 END), 0) AS expenses,
+            COALESCE(SUM(amount_accounting), 0) AS net
+        FROM transactions WHERE book = ?
+    ''', (book['title'],)).fetchone()
+
+    bundles = db.execute('''
+        SELECT bun.name FROM bundles bun
+        JOIN bundle_books bb ON bun.id = bb.bundle_id
+        WHERE bb.book_id = ?
+    ''', (bid,)).fetchall()
+
+    db.close()
+    return render_template('catalog_detail.html',
+        book=book, book_authors=book_authors, all_authors=all_authors,
+        stages=stages, print_runs=print_runs, financials=financials,
+        bundles=bundles, author_roles=AUTHOR_ROLES,
+        production_stages_list=PRODUCTION_STAGES_LIST,
+        production_statuses=PRODUCTION_STATUSES)
+
+
+@app.route('/catalog/<int:bid>/edit', methods=['GET', 'POST'])
+@login_required
+def catalog_edit(bid):
+    db = get_db()
+    book = db.execute('SELECT * FROM books WHERE id=?', (bid,)).fetchone()
+    if not book:
+        db.close()
+        flash('ספר לא נמצא', 'danger')
+        return redirect(url_for('catalog'))
+
+    categories = db.execute('SELECT * FROM categories ORDER BY name').fetchall()
+    series = db.execute('SELECT * FROM series ORDER BY name').fetchall()
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        if not title:
+            flash('שם הספר הוא שדה חובה', 'danger')
+        else:
+            existing = db.execute(
+                'SELECT id FROM books WHERE title=? AND id!=?', (title, bid)
+            ).fetchone()
+            if existing:
+                flash('ספר עם שם זה כבר קיים', 'danger')
+            else:
+                db.execute('''
+                    UPDATE books SET title=?, isbn=?, description=?, cover_image_url=?,
+                        publication_date=?, list_price=?, status=?,
+                        category_id=?, series_id=?, series_order=?
+                    WHERE id=?
+                ''', (
+                    title,
+                    request.form.get('isbn', '').strip() or None,
+                    request.form.get('description', '').strip() or None,
+                    request.form.get('cover_image_url', '').strip() or None,
+                    request.form.get('publication_date', '').strip() or None,
+                    float(request.form.get('list_price') or 0) or None,
+                    request.form.get('status', 'טיוטה'),
+                    request.form.get('category_id') or None,
+                    request.form.get('series_id') or None,
+                    request.form.get('series_order') or None,
+                    bid,
+                ))
+                db.commit()
+                db.close()
+                flash('הספר עודכן בהצלחה', 'success')
+                return redirect(url_for('catalog_detail', bid=bid))
+
+    db.close()
+    return render_template('catalog_form.html',
+        book=book, categories=categories, series=series,
+        book_statuses=BOOK_STATUSES)
+
+
+@app.route('/catalog/<int:bid>/delete', methods=['POST'])
+@login_required
+def catalog_delete(bid):
+    db = get_db()
+    book = db.execute('SELECT title FROM books WHERE id=?', (bid,)).fetchone()
+    if book:
+        db.execute('DELETE FROM books WHERE id=?', (bid,))
+        db.commit()
+        flash(f'הספר "{book["title"]}" נמחק', 'warning')
+    db.close()
+    return redirect(url_for('catalog'))
+
+
+# ── Book Authors (from detail page) ──────────────────────────────────────────
+
+@app.route('/catalog/<int:bid>/authors/add', methods=['POST'])
+@login_required
+def catalog_author_add(bid):
+    author_id = request.form.get('author_id')
+    role = request.form.get('role', 'מחבר')
+    royalty = float(request.form.get('royalty_pct') or 0)
+    db = get_db()
+    try:
+        db.execute('''
+            INSERT OR REPLACE INTO book_authors (book_id, author_id, role, royalty_pct)
+            VALUES (?, ?, ?, ?)
+        ''', (bid, author_id, role, royalty))
+        db.commit()
+        flash('המחבר נוסף', 'success')
+    except Exception as e:
+        flash(f'שגיאה: {e}', 'danger')
+    db.close()
+    return redirect(url_for('catalog_detail', bid=bid) + '#tab-authors')
+
+
+@app.route('/catalog/<int:bid>/authors/<int:aid>/remove', methods=['POST'])
+@login_required
+def catalog_author_remove(bid, aid):
+    db = get_db()
+    db.execute('DELETE FROM book_authors WHERE book_id=? AND author_id=?', (bid, aid))
+    db.commit()
+    db.close()
+    flash('המחבר הוסר', 'warning')
+    return redirect(url_for('catalog_detail', bid=bid) + '#tab-authors')
+
+
+# ── Production Stages (from detail page) ─────────────────────────────────────
+
+@app.route('/catalog/<int:bid>/stages/add', methods=['POST'])
+@login_required
+def stage_add(bid):
+    db = get_db()
+    db.execute('''
+        INSERT INTO production_stages (book_id, stage, status, deadline, assigned_to, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        bid,
+        request.form.get('stage', '').strip(),
+        request.form.get('status', 'ממתין'),
+        request.form.get('deadline', '').strip() or None,
+        request.form.get('assigned_to', '').strip() or None,
+        request.form.get('notes', '').strip() or None,
+    ))
+    db.commit()
+    db.close()
+    flash('שלב נוסף', 'success')
+    return redirect(url_for('catalog_detail', bid=bid) + '#tab-production')
+
+
+@app.route('/stages/<int:sid>/update', methods=['POST'])
+@login_required
+def stage_update(sid):
+    db = get_db()
+    stage = db.execute('SELECT book_id FROM production_stages WHERE id=?', (sid,)).fetchone()
+    new_status = request.form.get('status', 'ממתין')
+    completed_at = 'CURRENT_TIMESTAMP' if new_status == 'הושלם' else None
+    if completed_at:
+        db.execute('''
+            UPDATE production_stages
+            SET status=?, deadline=?, assigned_to=?, notes=?, completed_at=CURRENT_TIMESTAMP
+            WHERE id=?
+        ''', (
+            new_status,
+            request.form.get('deadline', '').strip() or None,
+            request.form.get('assigned_to', '').strip() or None,
+            request.form.get('notes', '').strip() or None,
+            sid,
+        ))
+    else:
+        db.execute('''
+            UPDATE production_stages
+            SET status=?, deadline=?, assigned_to=?, notes=?, completed_at=NULL
+            WHERE id=?
+        ''', (
+            new_status,
+            request.form.get('deadline', '').strip() or None,
+            request.form.get('assigned_to', '').strip() or None,
+            request.form.get('notes', '').strip() or None,
+            sid,
+        ))
+    db.commit()
+    bid = stage['book_id'] if stage else 0
+    db.close()
+    flash('שלב עודכן', 'success')
+    return redirect(url_for('catalog_detail', bid=bid) + '#tab-production')
+
+
+@app.route('/stages/<int:sid>/delete', methods=['POST'])
+@login_required
+def stage_delete(sid):
+    db = get_db()
+    stage = db.execute('SELECT book_id FROM production_stages WHERE id=?', (sid,)).fetchone()
+    bid = stage['book_id'] if stage else 0
+    db.execute('DELETE FROM production_stages WHERE id=?', (sid,))
+    db.commit()
+    db.close()
+    flash('שלב נמחק', 'warning')
+    return redirect(url_for('catalog_detail', bid=bid) + '#tab-production')
+
+
+# ── Authors ───────────────────────────────────────────────────────────────────
+
+@app.route('/authors', methods=['GET', 'POST'])
+@login_required
+def authors():
+    db = get_db()
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('שם המחבר הוא שדה חובה', 'danger')
+        else:
+            db.execute('''
+                INSERT INTO authors (name, bio, email, phone)
+                VALUES (?, ?, ?, ?)
+            ''', (
+                name,
+                request.form.get('bio', '').strip() or None,
+                request.form.get('email', '').strip() or None,
+                request.form.get('phone', '').strip() or None,
+            ))
+            db.commit()
+            flash(f'המחבר "{name}" נוסף', 'success')
+
+    authors_list = db.execute('''
+        SELECT a.*, COUNT(ba.book_id) AS book_count
+        FROM authors a
+        LEFT JOIN book_authors ba ON a.id = ba.author_id
+        GROUP BY a.id ORDER BY a.name
+    ''').fetchall()
+    db.close()
+    return render_template('authors.html', authors=authors_list)
+
+
+@app.route('/authors/<int:aid>/edit', methods=['GET', 'POST'])
+@login_required
+def author_edit(aid):
+    db = get_db()
+    author = db.execute('SELECT * FROM authors WHERE id=?', (aid,)).fetchone()
+    if not author:
+        db.close()
+        flash('מחבר לא נמצא', 'danger')
+        return redirect(url_for('authors'))
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('שם המחבר הוא שדה חובה', 'danger')
+        else:
+            db.execute('''
+                UPDATE authors SET name=?, bio=?, email=?, phone=? WHERE id=?
+            ''', (
+                name,
+                request.form.get('bio', '').strip() or None,
+                request.form.get('email', '').strip() or None,
+                request.form.get('phone', '').strip() or None,
+                aid,
+            ))
+            db.commit()
+            db.close()
+            flash('המחבר עודכן', 'success')
+            return redirect(url_for('authors'))
+
+    db.close()
+    return render_template('author_edit.html', author=author)
+
+
+@app.route('/authors/<int:aid>/delete', methods=['POST'])
+@login_required
+def author_delete(aid):
+    db = get_db()
+    author = db.execute('SELECT name FROM authors WHERE id=?', (aid,)).fetchone()
+    if author:
+        db.execute('DELETE FROM authors WHERE id=?', (aid,))
+        db.commit()
+        flash(f'המחבר "{author["name"]}" נמחק', 'warning')
+    db.close()
+    return redirect(url_for('authors'))
+
+
+# ── Categories & Series ───────────────────────────────────────────────────────
+
+def _cats_and_series(db):
+    cats = db.execute('''
+        SELECT c.*, COUNT(b.id) AS book_count
+        FROM categories c LEFT JOIN books b ON b.category_id = c.id
+        GROUP BY c.id ORDER BY c.name
+    ''').fetchall()
+    series_list = db.execute('''
+        SELECT s.*, COUNT(b.id) AS book_count
+        FROM series s LEFT JOIN books b ON b.series_id = s.id
+        GROUP BY s.id ORDER BY s.name
+    ''').fetchall()
+    return cats, series_list
+
+
+@app.route('/categories', methods=['GET', 'POST'])
+@login_required
+def categories():
+    db = get_db()
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        desc = request.form.get('description', '').strip() or None
+        if not name:
+            flash('שם הקטגוריה חסר', 'danger')
+        elif db.execute('SELECT id FROM categories WHERE name=?', (name,)).fetchone():
+            flash('קטגוריה זו כבר קיימת', 'danger')
+        else:
+            db.execute('INSERT INTO categories (name, description) VALUES (?, ?)', (name, desc))
+            db.commit()
+            flash(f'קטגוריה "{name}" נוספה', 'success')
+
+    cats, series_list = _cats_and_series(db)
+    db.close()
+    return render_template('categories.html', categories=cats, series=series_list)
+
+
+@app.route('/categories/<int:cid>/delete', methods=['POST'])
+@login_required
+def category_delete(cid):
+    db = get_db()
+    cat = db.execute('SELECT name FROM categories WHERE id=?', (cid,)).fetchone()
+    if cat:
+        db.execute('DELETE FROM categories WHERE id=?', (cid,))
+        db.commit()
+        flash(f'קטגוריה "{cat["name"]}" נמחקה', 'warning')
+    db.close()
+    return redirect(url_for('categories'))
+
+
+@app.route('/series', methods=['GET', 'POST'])
+@login_required
+def series():
+    db = get_db()
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        desc = request.form.get('description', '').strip() or None
+        if not name:
+            flash('שם הסדרה חסר', 'danger')
+        elif db.execute('SELECT id FROM series WHERE name=?', (name,)).fetchone():
+            flash('סדרה זו כבר קיימת', 'danger')
+        else:
+            db.execute('INSERT INTO series (name, description) VALUES (?, ?)', (name, desc))
+            db.commit()
+            flash(f'סדרה "{name}" נוספה', 'success')
+
+    cats, series_list = _cats_and_series(db)
+    db.close()
+    return render_template('categories.html', categories=cats, series=series_list)
+
+
+@app.route('/series/<int:sid>/delete', methods=['POST'])
+@login_required
+def series_delete(sid):
+    db = get_db()
+    s = db.execute('SELECT name FROM series WHERE id=?', (sid,)).fetchone()
+    if s:
+        db.execute('DELETE FROM series WHERE id=?', (sid,))
+        db.commit()
+        flash(f'סדרה "{s["name"]}" נמחקה', 'warning')
+    db.close()
+    return redirect(url_for('series'))
+
+
+# ── Bundles ───────────────────────────────────────────────────────────────────
+
+@app.route('/bundles')
+@login_required
+def bundles():
+    db = get_db()
+    bundles_raw = db.execute('SELECT * FROM bundles ORDER BY name').fetchall()
+    bundle_books_raw = db.execute('''
+        SELECT bb.bundle_id, b.id, b.title, b.list_price
+        FROM bundle_books bb JOIN books b ON bb.book_id = b.id
+        ORDER BY b.title
+    ''').fetchall()
+    db.close()
+
+    books_by_bundle = {}
+    for bb in bundle_books_raw:
+        books_by_bundle.setdefault(bb['bundle_id'], []).append(bb)
+
+    bundles_list = []
+    for b in bundles_raw:
+        d = dict(b)
+        d['books'] = books_by_bundle.get(b['id'], [])
+        bundles_list.append(d)
+
+    return render_template('bundles.html', bundles=bundles_list)
+
+
+@app.route('/bundles/add', methods=['GET', 'POST'])
+@login_required
+def bundle_add():
+    db = get_db()
+    all_books = db.execute('SELECT id, title FROM books ORDER BY title').fetchall()
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('שם החבילה חסר', 'danger')
+        elif db.execute('SELECT id FROM bundles WHERE name=?', (name,)).fetchone():
+            flash('חבילה עם שם זה כבר קיימת', 'danger')
+        else:
+            cur = db.execute('''
+                INSERT INTO bundles (name, description, bundle_price, active)
+                VALUES (?, ?, ?, ?)
+            ''', (
+                name,
+                request.form.get('description', '').strip() or None,
+                float(request.form.get('bundle_price') or 0) or None,
+                1 if request.form.get('active') else 0,
+            ))
+            bid = cur.lastrowid
+            for book_id in request.form.getlist('book_ids'):
+                db.execute('INSERT OR IGNORE INTO bundle_books (bundle_id, book_id) VALUES (?, ?)',
+                           (bid, book_id))
+            db.commit()
+            db.close()
+            flash(f'חבילה "{name}" נוספה', 'success')
+            return redirect(url_for('bundles'))
+
+    db.close()
+    return render_template('bundle_form.html', bundle=None, all_books=all_books, selected_ids=[])
+
+
+@app.route('/bundles/<int:bid>/edit', methods=['GET', 'POST'])
+@login_required
+def bundle_edit(bid):
+    db = get_db()
+    bundle = db.execute('SELECT * FROM bundles WHERE id=?', (bid,)).fetchone()
+    if not bundle:
+        db.close()
+        flash('חבילה לא נמצאה', 'danger')
+        return redirect(url_for('bundles'))
+
+    all_books = db.execute('SELECT id, title FROM books ORDER BY title').fetchall()
+    selected_ids = [r['book_id'] for r in db.execute(
+        'SELECT book_id FROM bundle_books WHERE bundle_id=?', (bid,)
+    ).fetchall()]
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('שם החבילה חסר', 'danger')
+        else:
+            db.execute('''
+                UPDATE bundles SET name=?, description=?, bundle_price=?, active=?
+                WHERE id=?
+            ''', (
+                name,
+                request.form.get('description', '').strip() or None,
+                float(request.form.get('bundle_price') or 0) or None,
+                1 if request.form.get('active') else 0,
+                bid,
+            ))
+            db.execute('DELETE FROM bundle_books WHERE bundle_id=?', (bid,))
+            for book_id in request.form.getlist('book_ids'):
+                db.execute('INSERT OR IGNORE INTO bundle_books (bundle_id, book_id) VALUES (?, ?)',
+                           (bid, book_id))
+            db.commit()
+            db.close()
+            flash('החבילה עודכנה', 'success')
+            return redirect(url_for('bundles'))
+
+    db.close()
+    return render_template('bundle_form.html', bundle=bundle,
+        all_books=all_books, selected_ids=selected_ids)
+
+
+@app.route('/bundles/<int:bid>/delete', methods=['POST'])
+@login_required
+def bundle_delete(bid):
+    db = get_db()
+    bundle = db.execute('SELECT name FROM bundles WHERE id=?', (bid,)).fetchone()
+    if bundle:
+        db.execute('DELETE FROM bundles WHERE id=?', (bid,))
+        db.commit()
+        flash(f'חבילה "{bundle["name"]}" נמחקה', 'warning')
+    db.close()
+    return redirect(url_for('bundles'))
+
+
+# ── Inventory ─────────────────────────────────────────────────────────────────
+
+@app.route('/inventory')
+@login_required
+def inventory():
+    db = get_db()
+    books = db.execute('''
+        SELECT b.id, b.title, b.status,
+               COALESCE(inv.stock_quantity, 0) AS stock,
+               COALESCE(inv.reorder_threshold, 50) AS reorder_threshold
+        FROM books b
+        LEFT JOIN inventory inv ON b.id = inv.book_id
+        ORDER BY b.title
+    ''').fetchall()
+    print_runs = db.execute('''
+        SELECT pr.*, b.title AS book_title
+        FROM print_runs pr JOIN books b ON pr.book_id = b.id
+        ORDER BY pr.run_date DESC LIMIT 20
+    ''').fetchall()
+    db.close()
+
+    total_stock = sum(b['stock'] for b in books)
+    stats = {
+        'total_books': len(books),
+        'total_stock': total_stock,
+        'low_stock': sum(1 for b in books if 0 < b['stock'] <= b['reorder_threshold']),
+        'out_of_stock': sum(1 for b in books if b['stock'] == 0),
+    }
+    return render_template('inventory.html', books=books,
+        print_runs=print_runs, stats=stats)
+
+
+@app.route('/inventory/<int:bid>/update', methods=['POST'])
+@login_required
+def inventory_update(bid):
+    qty = int(request.form.get('stock_quantity', 0))
+    threshold = int(request.form.get('reorder_threshold', 50))
+    db = get_db()
+    db.execute('''
+        INSERT INTO inventory (book_id, stock_quantity, reorder_threshold, last_updated)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(book_id) DO UPDATE SET
+            stock_quantity=excluded.stock_quantity,
+            reorder_threshold=excluded.reorder_threshold,
+            last_updated=CURRENT_TIMESTAMP
+    ''', (bid, qty, threshold))
+    db.commit()
+    db.close()
+    flash('המלאי עודכן', 'success')
+    return redirect(url_for('inventory'))
+
+
+@app.route('/print-runs/add', methods=['POST'])
+@login_required
+def print_run_add():
+    db = get_db()
+    book_id = request.form.get('book_id')
+    quantity = int(request.form.get('quantity', 0))
+    run_date = request.form.get('run_date', '').strip()
+    if not book_id or not quantity or not run_date:
+        flash('יש למלא ספר, כמות ותאריך', 'danger')
+    else:
+        db.execute('''
+            INSERT INTO print_runs (book_id, run_date, quantity, cost_per_unit, notes)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            book_id, run_date, quantity,
+            float(request.form.get('cost_per_unit') or 0) or None,
+            request.form.get('notes', '').strip() or None,
+        ))
+        # Update inventory stock
+        db.execute('''
+            INSERT INTO inventory (book_id, stock_quantity, last_updated)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(book_id) DO UPDATE SET
+                stock_quantity = stock_quantity + ?,
+                last_updated = CURRENT_TIMESTAMP
+        ''', (book_id, quantity, quantity))
+        db.commit()
+        flash('הדפסה נוספה והמלאי עודכן', 'success')
+    db.close()
+    return redirect(url_for('inventory'))
+
+
+@app.route('/print-runs/<int:rid>/delete', methods=['POST'])
+@login_required
+def print_run_delete(rid):
+    db = get_db()
+    pr = db.execute('SELECT * FROM print_runs WHERE id=?', (rid,)).fetchone()
+    if pr:
+        db.execute('DELETE FROM print_runs WHERE id=?', (rid,))
+        db.commit()
+        flash('רשומת הדפסה נמחקה', 'warning')
+    db.close()
+    return redirect(url_for('inventory'))
+
+
+# ── Production Overview ───────────────────────────────────────────────────────
+
+@app.route('/production')
+@login_required
+def production():
+    db = get_db()
+    books = db.execute('SELECT id, title, status FROM books ORDER BY title').fetchall()
+    stages_raw = db.execute('SELECT * FROM production_stages').fetchall()
+    db.close()
+
+    # Build {book_id: {stage_name: stage_row}}
+    pivot = {}
+    for s in stages_raw:
+        pivot.setdefault(s['book_id'], {})[s['stage']] = s
+
+    stage_names = PRODUCTION_STAGES_LIST
+
+    grid = [
+        {'book_id': b['id'], 'title': b['title'], 'stages': pivot.get(b['id'], {})}
+        for b in books
+    ]
+
+    stage_summary = []
+    for stage in stage_names:
+        counts = {'stage': stage, 'done': 0, 'in_progress': 0, 'pending': 0, 'delayed': 0}
+        for s in stages_raw:
+            if s['stage'] == stage:
+                if s['status'] == 'הושלם':
+                    counts['done'] += 1
+                elif s['status'] == 'בתהליך':
+                    counts['in_progress'] += 1
+                elif s['status'] == 'עיכוב':
+                    counts['delayed'] += 1
+                else:
+                    counts['pending'] += 1
+        stage_summary.append(counts)
+
+    return render_template('production.html',
+        grid=grid, stage_names=stage_names, stage_summary=stage_summary)
+
+
 # ── API ───────────────────────────────────────────────────────────────────────
 
 @app.route('/api/books')
 @login_required
 def api_books():
-    return jsonify(BOOKS)
+    return jsonify(get_books_list())
 
 
 @app.route('/api/items')

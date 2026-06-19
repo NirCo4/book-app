@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{% if book %}עריכת ספר{% else %}ספר חדש{% endif %}{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="d-flex align-items-center mb-4">
+      <a href="{{ url_for('catalog') }}" class="btn btn-outline-secondary btn-sm me-3">
+        <i class="bi bi-arrow-right"></i>
+      </a>
+      <h2 class="mb-0">{% if book %}עריכת "{{ book.title }}"{% else %}ספר חדש{% endif %}</h2>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">שם הספר <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control"
+                   value="{{ book.title if book else '' }}" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">סטטוס</label>
+              <select name="status" class="form-select">
+                {% for s in book_statuses %}
+                <option value="{{ s }}" {% if book and book.status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">מחיר מחירון (₪)</label>
+              <input type="number" name="list_price" class="form-control" min="0" step="0.01"
+                     value="{{ book.list_price if book and book.list_price else '' }}">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">ISBN</label>
+              <input type="text" name="isbn" class="form-control"
+                     value="{{ book.isbn if book and book.isbn else '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">תאריך פרסום</label>
+              <input type="date" name="publication_date" class="form-control"
+                     value="{{ book.publication_date if book and book.publication_date else '' }}">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">קטגוריה</label>
+              <select name="category_id" class="form-select">
+                <option value="">— ללא קטגוריה —</option>
+                {% for c in categories %}
+                <option value="{{ c.id }}"
+                  {% if book and book.category_id == c.id %}selected{% endif %}>
+                  {{ c.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">סדרה</label>
+              <select name="series_id" class="form-select">
+                <option value="">— ללא סדרה —</option>
+                {% for s in series %}
+                <option value="{{ s.id }}"
+                  {% if book and book.series_id == s.id %}selected{% endif %}>
+                  {{ s.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">מספר בסדרה</label>
+            <input type="number" name="series_order" class="form-control" min="1"
+                   value="{{ book.series_order if book and book.series_order else '' }}"
+                   style="max-width:120px">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">כתובת תמונת כריכה (URL)</label>
+            <input type="url" name="cover_image_url" class="form-control"
+                   value="{{ book.cover_image_url if book and book.cover_image_url else '' }}"
+                   placeholder="https://...">
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">תיאור</label>
+            <textarea name="description" class="form-control" rows="4">{{ book.description if book and book.description else '' }}</textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i> שמור
+            </button>
+            <a href="{{ url_for('catalog_detail', bid=book.id) if book else url_for('catalog') }}"
+               class="btn btn-outline-secondary">ביטול</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

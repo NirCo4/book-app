@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title }}{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('catalog') }}" class="btn btn-outline-secondary btn-sm me-3">
+    <i class="bi bi-arrow-right"></i>
+  </a>
+  <div class="flex-grow-1">
+    <h2 class="mb-0">{{ book.title }}</h2>
+    <small class="text-muted">
+      {% if book.category_name %}{{ book.category_name }} &bull; {% endif %}
+      {% if book.series_name %}סדרה: {{ book.series_name }}{% if book.series_order %} #{{ book.series_order }}{% endif %} &bull; {% endif %}
+      {% if book.list_price %}₪{{ "%.0f"|format(book.list_price) }} &bull; {% endif %}
+      {% if book.publication_date %}{{ book.publication_date }}{% endif %}
+    </small>
+  </div>
+  <div class="ms-3">
+    {% if book.status == 'יצא לאור' %}
+      <span class="badge bg-success fs-6">{{ book.status }}</span>
+    {% elif book.status == 'בייצור' %}
+      <span class="badge bg-warning text-dark fs-6">{{ book.status }}</span>
+    {% elif book.status == 'אזל' %}
+      <span class="badge bg-danger fs-6">{{ book.status }}</span>
+    {% else %}
+      <span class="badge bg-secondary fs-6">{{ book.status }}</span>
+    {% endif %}
+  </div>
+  <a href="{{ url_for('catalog_edit', bid=book.id) }}" class="btn btn-outline-primary btn-sm ms-2">
+    <i class="bi bi-pencil me-1"></i> עריכה
+  </a>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="bookTabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-details">פרטים</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-authors" id="authors-tab-link">מחברים <span class="badge bg-secondary">{{ book_authors|length }}</span></a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-production">ייצור</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-inventory">מלאי</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-financials">כספים</a></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- Details -->
+  <div class="tab-pane fade show active" id="tab-details">
+    <div class="row g-4">
+      <div class="col-md-4">
+        {% if book.cover_image_url %}
+        <img src="{{ book.cover_image_url }}" class="img-fluid rounded shadow-sm" alt="{{ book.title }}">
+        {% else %}
+        <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height:250px">
+          <i class="bi bi-book text-muted" style="font-size:4rem"></i>
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-md-8">
+        <dl class="row">
+          <dt class="col-sm-4">ISBN</dt>
+          <dd class="col-sm-8">{{ book.isbn or '—' }}</dd>
+          <dt class="col-sm-4">תאריך פרסום</dt>
+          <dd class="col-sm-8">{{ book.publication_date or '—' }}</dd>
+          <dt class="col-sm-4">מחיר מחירון</dt>
+          <dd class="col-sm-8">{% if book.list_price %}₪{{ "%.2f"|format(book.list_price) }}{% else %}—{% endif %}</dd>
+          <dt class="col-sm-4">קטגוריה</dt>
+          <dd class="col-sm-8">{{ book.category_name or '—' }}</dd>
+          <dt class="col-sm-4">סדרה</dt>
+          <dd class="col-sm-8">{% if book.series_name %}{{ book.series_name }}{% if book.series_order %} (#{{ book.series_order }}){% endif %}{% else %}—{% endif %}</dd>
+          <dt class="col-sm-4">חבילות</dt>
+          <dd class="col-sm-8">{% if bundles %}{{ bundles|map(attribute='name')|join(', ') }}{% else %}—{% endif %}</dd>
+        </dl>
+        {% if book.description %}
+        <p class="mt-3 text-muted">{{ book.description }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Authors -->
+  <div class="tab-pane fade" id="tab-authors">
+    <div class="row g-4">
+      <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-light"><h6 class="mb-0">מחברים לספר זה</h6></div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-secondary">
+                <tr><th>שם</th><th>תפקיד</th><th class="text-center">תמלוגים %</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for a in book_authors %}
+                <tr>
+                  <td>{{ a.name }}</td>
+                  <td>{{ a.role }}</td>
+                  <td class="text-center">{{ a.royalty_pct }}%</td>
+                  <td class="text-end">
+                    <form method="post" action="{{ url_for('catalog_author_remove', bid=book.id, aid=a.id) }}"
+                          class="d-inline" onsubmit="return confirm('להסיר את {{ a.name }}?')">
+                      <button class="btn btn-xs btn-outline-danger"><i class="bi bi-x"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted text-center py-3">לא שויך מחבר עדיין</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-primary text-white"><h6 class="mb-0">הוסף מחבר</h6></div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('catalog_author_add', bid=book.id) }}">
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">מחבר</label>
+                <select name="author_id" class="form-select form-select-sm" required>
+                  <option value="">— בחר —</option>
+                  {% for a in all_authors %}
+                  <option value="{{ a.id }}">{{ a.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">תפקיד</label>
+                <select name="role" class="form-select form-select-sm">
+                  {% for r in author_roles %}
+                  <option value="{{ r }}">{{ r }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">תמלוגים %</label>
+                <input type="number" name="royalty_pct" class="form-control form-control-sm"
+                       min="0" max="100" step="0.1" value="0">
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm w-100">הוסף</button>
+            </form>
+            <div class="mt-2 text-center">
+              <small><a href="{{ url_for('authors') }}">ניהול מחברים</a></small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Production -->
+  <div class="tab-pane fade" id="tab-production">
+    <div class="row g-4">
+      <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-light"><h6 class="mb-0">שלבי ייצור</h6></div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-secondary">
+                <tr><th>שלב</th><th class="text-center">סטטוס</th><th>תאריך יעד</th><th>אחראי</th><th>הערות</th><th></th></tr>
+              </thead>
+              <tbody>
+                {% for s in stages %}
+                <tr>
+                  <td class="fw-semibold">{{ s.stage }}</td>
+                  <td class="text-center">
+                    {% if s.status == 'הושלם' %}
+                      <span class="badge bg-success">{{ s.status }}</span>
+                    {% elif s.status == 'בתהליך' %}
+                      <span class="badge bg-primary">{{ s.status }}</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ s.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="small">{{ s.deadline or '—' }}</td>
+                  <td class="small">{{ s.assigned_to or '—' }}</td>
+                  <td class="small text-muted">{{ s.notes or '' }}</td>
+                  <td class="text-end">
+                    <button class="btn btn-xs btn-outline-secondary"
+                            data-bs-toggle="modal" data-bs-target="#editStage{{ s.id }}">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <form method="post" action="{{ url_for('stage_delete', sid=s.id) }}"
+                          class="d-inline" onsubmit="return confirm('למחוק שלב זה?')">
+                      <button class="btn btn-xs btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-3">אין שלבים</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-primary text-white"><h6 class="mb-0">הוסף שלב</h6></div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('stage_add', bid=book.id) }}">
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">שלב</label>
+                <select name="stage" class="form-select form-select-sm">
+                  {% for s in production_stages_list %}
+                  <option value="{{ s }}">{{ s }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">סטטוס</label>
+                <select name="status" class="form-select form-select-sm">
+                  {% for s in production_statuses %}
+                  <option value="{{ s }}">{{ s }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">תאריך יעד</label>
+                <input type="date" name="deadline" class="form-control form-control-sm">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">אחראי</label>
+                <input type="text" name="assigned_to" class="form-control form-control-sm">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-semibold">הערות</label>
+                <input type="text" name="notes" class="form-control form-control-sm">
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm w-100">הוסף שלב</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory -->
+  <div class="tab-pane fade" id="tab-inventory">
+    <div class="row g-4">
+      <div class="col-md-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-light"><h6 class="mb-0">עדכון מלאי</h6></div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('inventory_update', bid=book.id) }}">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">כמות במלאי</label>
+                <input type="number" name="stock_quantity" class="form-control"
+                       min="0" value="{{ book.stock }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">סף להזמנה מחדש</label>
+                <input type="number" name="reorder_threshold" class="form-control"
+                       min="0" value="{{ book.reorder_threshold or 50 }}">
+              </div>
+              <button type="submit" class="btn btn-primary">עדכן מלאי</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">היסטוריית הדפסות</h6>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <thead class="table-secondary">
+                <tr><th>תאריך</th><th class="text-center">כמות</th><th class="text-center">עלות ליח'</th><th>הערות</th></tr>
+              </thead>
+              <tbody>
+                {% for pr in print_runs %}
+                <tr>
+                  <td>{{ pr.run_date }}</td>
+                  <td class="text-center">{{ "{:,}".format(pr.quantity) }}</td>
+                  <td class="text-center">{% if pr.cost_per_unit %}₪{{ "%.2f"|format(pr.cost_per_unit) }}{% else %}—{% endif %}</td>
+                  <td class="small text-muted">{{ pr.notes or '' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center text-muted py-3">אין הדפסות רשומות</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mt-3 text-center">
+          <a href="{{ url_for('inventory') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-plus me-1"></i> הוסף הדפסה
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Financials -->
+  <div class="tab-pane fade" id="tab-financials">
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center p-3">
+          <div class="text-success fw-bold fs-4">₪{{ "{:,.0f}".format(financials.income) }}</div>
+          <div class="text-muted small">הכנסות</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center p-3">
+          <div class="text-danger fw-bold fs-4">₪{{ "{:,.0f}".format(financials.expenses|abs) }}</div>
+          <div class="text-muted small">הוצאות</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center p-3">
+          <div class="fw-bold fs-4 {% if financials.net >= 0 %}text-success{% else %}text-danger{% endif %}">
+            ₪{{ "{:,.0f}".format(financials.net) }}
+          </div>
+          <div class="text-muted small">נטו</div>
+        </div>
+      </div>
+    </div>
+    <div class="text-center">
+      <a href="{{ url_for('book_summary') }}" class="btn btn-outline-primary btn-sm">
+        סיכום כספי מלא לפי ספר
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Edit Stage Modals -->
+{% for s in stages %}
+<div class="modal fade" id="editStage{{ s.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">עריכת שלב: {{ s.stage }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('stage_update', sid=s.id) }}">
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label fw-semibold">סטטוס</label>
+            <select name="status" class="form-select">
+              {% for st in production_statuses %}
+              <option value="{{ st }}" {% if s.status == st %}selected{% endif %}>{{ st }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">תאריך יעד</label>
+            <input type="date" name="deadline" class="form-control" value="{{ s.deadline or '' }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">אחראי</label>
+            <input type="text" name="assigned_to" class="form-control" value="{{ s.assigned_to or '' }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">הערות</label>
+            <input type="text" name="notes" class="form-control" value="{{ s.notes or '' }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary">שמור</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+// Activate tab from URL hash
+const hash = window.location.hash;
+if (hash) {
+  const tab = document.querySelector(`[href="${hash}"]`);
+  if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+}
+</script>
+{% endblock %}

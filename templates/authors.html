@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}מחברים{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-person-lines-fill me-2"></i>מחברים</h2>
+</div>
+
+<div class="row g-4">
+  <!-- Authors list -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-secondary">
+            <tr>
+              <th>שם</th>
+              <th>ביוגרפיה</th>
+              <th class="text-center">ספרים</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in authors %}
+            <tr>
+              <td class="align-middle fw-semibold">{{ a.name }}</td>
+              <td class="align-middle small text-muted" style="max-width:300px">
+                {{ (a.bio or '')[:100] }}{% if a.bio and a.bio|length > 100 %}…{% endif %}
+              </td>
+              <td class="align-middle text-center">
+                <span class="badge bg-secondary">{{ a.book_count }}</span>
+              </td>
+              <td class="text-end align-middle">
+                <a href="{{ url_for('author_edit', aid=a.id) }}"
+                   class="btn btn-xs btn-outline-secondary me-1">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{{ url_for('author_delete', aid=a.id) }}"
+                      class="d-inline"
+                      onsubmit="return confirm('למחוק את {{ a.name }}? אם שויך לספרים, הפעולה תיחסם.')">
+                  <button class="btn btn-xs btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-4">אין מחברים — הוסף את הראשון</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add author form -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">הוסף מחבר</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('authors') }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">שם <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">אימייל</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ביוגרפיה</label>
+            <textarea name="bio" class="form-control" rows="3"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-person-plus me-1"></i> הוסף
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

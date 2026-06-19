@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}מלאי{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-archive me-2"></i>מלאי</h2>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm text-center p-3">
+      <div class="fw-bold fs-4">{{ stats.total_books }}</div>
+      <div class="text-muted small">ספרים בקטלוג</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm text-center p-3">
+      <div class="fw-bold fs-4 text-success">{{ "{:,}".format(stats.total_stock) }}</div>
+      <div class="text-muted small">סה"כ יחידות במלאי</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm text-center p-3">
+      <div class="fw-bold fs-4 text-warning">{{ stats.low_stock }}</div>
+      <div class="text-muted small">ספרים עם מלאי נמוך</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm text-center p-3">
+      <div class="fw-bold fs-4 text-danger">{{ stats.out_of_stock }}</div>
+      <div class="text-muted small">אזלו מהמלאי</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- Stock table -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light"><h6 class="mb-0">סטטוס מלאי לפי ספר</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-secondary">
+            <tr>
+              <th>ספר</th>
+              <th class="text-center">במלאי</th>
+              <th class="text-center">סף הזמנה</th>
+              <th class="text-center">סטטוס</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in books %}
+            <tr>
+              <td class="align-middle">
+                <a href="{{ url_for('catalog_detail', bid=b.id) }}"
+                   class="text-decoration-none fw-semibold">{{ b.title }}</a>
+              </td>
+              <td class="text-center align-middle fw-bold">{{ b.stock }}</td>
+              <td class="text-center align-middle text-muted small">{{ b.reorder_threshold or 50 }}</td>
+              <td class="text-center align-middle">
+                {% if b.stock == 0 %}
+                  <span class="badge bg-danger">אזל</span>
+                {% elif b.stock <= b.reorder_threshold %}
+                  <span class="badge bg-warning text-dark">מלאי נמוך</span>
+                {% else %}
+                  <span class="badge bg-success">תקין</span>
+                {% endif %}
+              </td>
+              <td class="text-end align-middle">
+                <button class="btn btn-xs btn-outline-primary"
+                        data-bs-toggle="modal" data-bs-target="#updateStock{{ b.id }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">אין ספרים בקטלוג</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add print run + recent print runs -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-primary text-white"><h6 class="mb-0">הוסף הדפסה</h6></div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('print_run_add') }}">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">ספר <span class="text-danger">*</span></label>
+            <select name="book_id" class="form-select form-select-sm" required>
+              <option value="">— בחר ספר —</option>
+              {% for b in books %}
+              <option value="{{ b.id }}">{{ b.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">כמות <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" class="form-control form-control-sm"
+                   min="1" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">עלות ליחידה (₪)</label>
+            <input type="number" name="cost_per_unit" class="form-control form-control-sm"
+                   min="0" step="0.01">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">תאריך הדפסה</label>
+            <input type="date" name="run_date" class="form-control form-control-sm">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">הערות</label>
+            <input type="text" name="notes" class="form-control form-control-sm">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-plus me-1"></i> הוסף הדפסה
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light"><h6 class="mb-0">הדפסות אחרונות</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-secondary">
+            <tr><th>ספר</th><th>תאריך</th><th class="text-center">כמות</th></tr>
+          </thead>
+          <tbody>
+            {% for pr in print_runs %}
+            <tr>
+              <td class="small">{{ pr.book_title }}</td>
+              <td class="small text-muted">{{ pr.run_date or '—' }}</td>
+              <td class="text-center small">{{ "{:,}".format(pr.quantity) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-3">אין הדפסות</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Update stock modals -->
+{% for b in books %}
+<div class="modal fade" id="updateStock{{ b.id }}" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">עדכון מלאי — {{ b.title }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('inventory_update', bid=b.id) }}">
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label fw-semibold">כמות במלאי</label>
+            <input type="number" name="stock_quantity" class="form-control"
+                   min="0" value="{{ b.stock }}">
+          </div>
+          <div class="mb-0">
+            <label class="form-label fw-semibold">סף הזמנה מחדש</label>
+            <input type="number" name="reorder_threshold" class="form-control"
+                   min="0" value="{{ b.reorder_threshold or 50 }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ביטול</button>
+          <button type="submit" class="btn btn-primary btn-sm">עדכן</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

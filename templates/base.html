@@ -20,42 +20,66 @@
     </button>
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
              href="{{ url_for('dashboard') }}">
             <i class="bi bi-speedometer2"></i> דשבורד
           </a>
         </li>
+
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint in ('entry','edit_entry') %}active{% endif %}"
              href="{{ url_for('entry') }}">
             <i class="bi bi-plus-circle"></i> הזנת נתונים
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'monthly' %}active{% endif %}"
-             href="{{ url_for('monthly') }}">
-            <i class="bi bi-calendar3"></i> סיכום חודשי
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {% if request.endpoint in ('catalog','catalog_add','catalog_detail','catalog_edit','authors','author_edit','categories','series','bundles','bundle_add','bundle_edit') %}active{% endif %}"
+             href="#" data-bs-toggle="dropdown">
+            <i class="bi bi-journals"></i> ניהול ספרים
           </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('catalog') }}"><i class="bi bi-grid me-1"></i> קטלוג ספרים</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('authors') }}"><i class="bi bi-person-lines-fill me-1"></i> מחברים</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('series') }}"><i class="bi bi-collection me-1"></i> סדרות</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('categories') }}"><i class="bi bi-tag me-1"></i> קטגוריות</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('bundles') }}"><i class="bi bi-box-seam me-1"></i> חבילות</a></li>
+          </ul>
         </li>
-        <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'book_summary' %}active{% endif %}"
-             href="{{ url_for('book_summary') }}">
-            <i class="bi bi-journals"></i> סיכום לפי ספר
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {% if request.endpoint in ('inventory','production') %}active{% endif %}"
+             href="#" data-bs-toggle="dropdown">
+            <i class="bi bi-boxes"></i> מלאי וייצור
           </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('inventory') }}"><i class="bi bi-archive me-1"></i> מלאי</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('production') }}"><i class="bi bi-kanban me-1"></i> מהלך ייצור</a></li>
+          </ul>
         </li>
-        <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'matrix' %}active{% endif %}"
-             href="{{ url_for('matrix') }}">
-            <i class="bi bi-table"></i> מטריצה
+
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {% if request.endpoint in ('monthly','book_summary','matrix') %}active{% endif %}"
+             href="#" data-bs-toggle="dropdown">
+            <i class="bi bi-bar-chart-line"></i> דוחות
           </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('monthly') }}"><i class="bi bi-calendar3 me-1"></i> סיכום חודשי</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('book_summary') }}"><i class="bi bi-book me-1"></i> סיכום לפי ספר</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('matrix') }}"><i class="bi bi-table me-1"></i> מטריצה</a></li>
+          </ul>
         </li>
+
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'users' %}active{% endif %}"
              href="{{ url_for('users') }}">
             <i class="bi bi-people"></i> משתמשים
           </a>
         </li>
+
       </ul>
       {% if session.username %}
       <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
