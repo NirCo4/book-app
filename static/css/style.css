@@ -56,3 +56,13 @@ body {
 
 /* ── Alerts ──────────────────────────────────────────────────── */
 .alert { border-radius: 8px; }
+
+/* ── Entry grid (spreadsheet-style data entry) ──────────────────── */
+.entry-grid td { padding: 3px 6px; }
+.entry-grid select.form-select-sm,
+.entry-grid input.form-control-sm { font-size: 0.83rem; }
+.entry-grid tbody tr:hover { background: #f8f9fb; }
+.entry-grid .new-row { background: #eef6ff; }
+.entry-grid .new-row:hover { background: #e3f0ff; }
+.entry-grid .save-status { min-width: 24px; }
+.entry-grid .save-status .spinner-border { width: 0.9rem; height: 0.9rem; }

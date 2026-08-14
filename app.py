@@ -203,49 +203,104 @@ def dashboard():
 
 # ── Data Entry ────────────────────────────────────────────────────────────────
 
-@app.route('/entry', methods=['GET', 'POST'])
+def validate_entry_fields(data):
+    """Validate a transaction payload dict. Returns (errors_dict, cleaned_values_dict)."""
+    month = (data.get('month') or '').strip()
+    book = (data.get('book') or '').strip()
+    status = (data.get('status') or '').strip()
+    ttype = (data.get('type') or '').strip()
+    item = (data.get('item') or '').strip()
+    notes = (data.get('notes') or '').strip()
+
+    errors = {}
+    if month not in MONTHS:      errors['month'] = 'חודש לא תקין'
+    if not book:                 errors['book'] = 'יש לבחור ספר'
+    if status not in STATUSES:   errors['status'] = 'יש לבחור סטטוס'
+    if ttype not in TYPES:       errors['type'] = 'יש לבחור סוג תנועה'
+    if not item:                 errors['item'] = 'יש לבחור פריט'
+
+    amount = None
+    try:
+        amount = float(data.get('amount') or 0)
+        if amount <= 0:
+            errors['amount'] = 'יש להזין סכום חיובי'
+    except (TypeError, ValueError):
+        errors['amount'] = 'סכום לא תקין'
+
+    return errors, {
+        'month': month, 'book': book, 'status': status, 'type': ttype,
+        'item': item, 'amount': amount, 'notes': notes,
+    }
+
+
+def serialize_entry(row):
+    return {
+        'id': row['id'], 'month': row['month'], 'book': row['book'],
+        'status': row['status'], 'type': row['type'], 'item': row['item'],
+        'amount': row['amount_positive'], 'notes': row['notes'] or '',
+        'entered_by': row['entered_by'] or '',
+    }
+
+
+@app.route('/api/entries', methods=['POST'])
+@login_required
+def api_create_entry():
+    data = request.get_json(silent=True) or {}
+    errors, v = validate_entry_fields(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    accounting = v['amount'] if v['type'] == 'הכנסה' else -v['amount']
+    db = get_db()
+    cur = db.execute('''
+        INSERT INTO transactions
+            (month, book, status, type, item, amount_positive, amount_accounting, notes, entered_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (v['month'], v['book'], v['status'], v['type'], v['item'], v['amount'], accounting,
+          v['notes'] or None, session['username']))
+    db.commit()
+    row = db.execute('SELECT * FROM transactions WHERE id=?', (cur.lastrowid,)).fetchone()
+    db.close()
+    return jsonify(serialize_entry(row)), 201
+
+
+@app.route('/api/entries/<int:tid>', methods=['PATCH'])
+@login_required
+def api_update_entry(tid):
+    data = request.get_json(silent=True) or {}
+    errors, v = validate_entry_fields(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    db = get_db()
+    exists = db.execute('SELECT id FROM transactions WHERE id=?', (tid,)).fetchone()
+    if not exists:
+        db.close()
+        return jsonify({'errors': {'_': 'רשומה לא נמצאה'}}), 404
+    accounting = v['amount'] if v['type'] == 'הכנסה' else -v['amount']
+    db.execute('''
+        UPDATE transactions
+        SET month=?, book=?, status=?, type=?, item=?,
+            amount_positive=?, amount_accounting=?, notes=?
+        WHERE id=?
+    ''', (v['month'], v['book'], v['status'], v['type'], v['item'],
+          v['amount'], accounting, v['notes'] or None, tid))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/entries/<int:tid>', methods=['DELETE'])
+@login_required
+def api_delete_entry(tid):
+    db = get_db()
+    db.execute('DELETE FROM transactions WHERE id=?', (tid,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/entry')
 @login_required
 def entry():
-    if request.method == 'POST':
-        month = request.form.get('month', '').strip()
-        book = request.form.get('book', '').strip()
-        status = request.form.get('status', '').strip()
-        ttype = request.form.get('type', '').strip()
-        item = request.form.get('item', '').strip()
-        amount_str = request.form.get('amount', '').strip()
-        notes = request.form.get('notes', '').strip()
-
-        errors = []
-        if not month:   errors.append('יש לבחור חודש')
-        if not book:    errors.append('יש לבחור ספר')
-        if not status:  errors.append('יש לבחור סטטוס')
-        if not ttype:   errors.append('יש לבחור סוג תנועה')
-        if not item:    errors.append('יש לבחור פריט')
-        try:
-            amount = float(amount_str) if amount_str else None
-            if amount is None or amount <= 0:
-                errors.append('יש להזין סכום חיובי')
-        except ValueError:
-            errors.append('סכום לא תקין')
-            amount = None
-
-        if errors:
-            for e in errors:
-                flash(e, 'danger')
-        else:
-            accounting = amount if ttype == 'הכנסה' else -amount
-            db = get_db()
-            db.execute('''
-                INSERT INTO transactions
-                    (month, book, status, type, item, amount_positive, amount_accounting, notes, entered_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (month, book, status, ttype, item, amount, accounting,
-                  notes or None, session['username']))
-            db.commit()
-            db.close()
-            flash('הרשומה נשמרה בהצלחה', 'success')
-            return redirect(url_for('entry'))
-
     page = max(1, request.args.get('page', 1, type=int))
     per_page = 50
     offset = (page - 1) * per_page
@@ -261,61 +316,6 @@ def entry():
         books=get_books_list(), months=MONTHS, statuses=STATUSES, types=TYPES,
         items=ITEMS, recent=recent, month_labels=MONTH_LABELS,
         page=page, total_pages=total_pages)
-
-
-@app.route('/entry/<int:tid>/edit', methods=['GET', 'POST'])
-@login_required
-def edit_entry(tid):
-    db = get_db()
-    row = db.execute('SELECT * FROM transactions WHERE id=?', (tid,)).fetchone()
-    if not row:
-        db.close()
-        flash('רשומה לא נמצאה', 'danger')
-        return redirect(url_for('entry'))
-
-    if request.method == 'POST':
-        month = request.form.get('month', '').strip()
-        book = request.form.get('book', '').strip()
-        status = request.form.get('status', '').strip()
-        ttype = request.form.get('type', '').strip()
-        item = request.form.get('item', '').strip()
-        amount_str = request.form.get('amount', '').strip()
-        notes = request.form.get('notes', '').strip()
-        try:
-            amount = float(amount_str)
-        except ValueError:
-            flash('סכום לא תקין', 'danger')
-            return render_template('entry_edit.html', row=row,
-                books=get_books_list(), months=MONTHS, statuses=STATUSES,
-                types=TYPES, items=ITEMS, month_labels=MONTH_LABELS)
-
-        accounting = amount if ttype == 'הכנסה' else -amount
-        db.execute('''
-            UPDATE transactions
-            SET month=?, book=?, status=?, type=?, item=?,
-                amount_positive=?, amount_accounting=?, notes=?
-            WHERE id=?
-        ''', (month, book, status, ttype, item, amount, accounting, notes or None, tid))
-        db.commit()
-        db.close()
-        flash('הרשומה עודכנה בהצלחה', 'success')
-        return redirect(url_for('entry'))
-
-    db.close()
-    return render_template('entry_edit.html', row=row,
-        books=get_books_list(), months=MONTHS, statuses=STATUSES,
-        types=TYPES, items=ITEMS, month_labels=MONTH_LABELS)
-
-
-@app.route('/entry/<int:tid>/delete', methods=['POST'])
-@login_required
-def delete_entry(tid):
-    db = get_db()
-    db.execute('DELETE FROM transactions WHERE id=?', (tid,))
-    db.commit()
-    db.close()
-    flash('הרשומה נמחקה', 'warning')
-    return redirect(url_for('entry'))
 
 
 # ── Monthly Summary ───────────────────────────────────────────────────────────

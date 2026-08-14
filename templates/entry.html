@@ -2,178 +2,359 @@
 {% block title %}הזנת נתונים{% endblock %}
 {% block content %}
 
-<div class="row g-4">
-  <!-- Form -->
-  <div class="col-lg-5">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>הזנת תנועה חדשה</h5>
-      </div>
-      <div class="card-body">
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-table me-2"></i>הזנת נתונים</h4>
+  <div class="d-flex align-items-center gap-2">
+    <input type="text" id="barcodeInput" class="form-control form-control-sm" style="width: 220px;"
+           placeholder="סריקת ברקוד (עתידי)" disabled
+           title="חיבור לסורק ברקוד — זמין בגרסה הבאה">
+  </div>
+</div>
 
-        <!-- Barcode scanner input (future integration) -->
-        <div class="mb-3 barcode-section">
-          <label class="form-label text-muted small">
-            <i class="bi bi-upc-scan me-1"></i>סריקת ברקוד (עתידי)
-          </label>
-          <input type="text" id="barcodeInput" class="form-control form-control-sm"
-                 placeholder="הנח את הסמן כאן וסרוק ברקוד..." disabled
-                 title="חיבור לסורק ברקוד — זמין בגרסה הבאה">
-          <div class="form-text text-muted">שדה זה מיועד לחיבור עתידי לסורק ברקוד</div>
-        </div>
-
-        <hr>
-
-        <form method="post" id="entryForm">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">חודש <span class="text-danger">*</span></label>
-            <select name="month" class="form-select" required>
-              <option value="">— בחר חודש —</option>
-              {% for m in months %}
-              <option value="{{ m }}">{{ month_labels[m] }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">ספר <span class="text-danger">*</span></label>
-            <select name="book" class="form-select" required>
-              <option value="">— בחר ספר —</option>
-              {% for b in books %}
-              <option value="{{ b }}">{{ b }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="row g-2 mb-3">
-            <div class="col">
-              <label class="form-label fw-semibold">סטטוס <span class="text-danger">*</span></label>
-              <select name="status" class="form-select" required>
-                <option value="">— בחר —</option>
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive" id="entryTableWrap">
+      <table class="table table-sm table-hover mb-0 align-middle entry-grid">
+        <thead class="table-secondary">
+          <tr>
+            <th style="width: 46px;">#</th>
+            <th style="width: 130px;">חודש</th>
+            <th style="width: 180px;">ספר</th>
+            <th style="width: 110px;">סטטוס</th>
+            <th style="width: 100px;">סוג</th>
+            <th style="width: 190px;">פריט</th>
+            <th style="width: 130px;">סכום</th>
+            <th>הערות</th>
+            <th style="width: 90px;">הוזן ע"י</th>
+            <th style="width: 40px;"></th>
+            <th style="width: 40px;"></th>
+          </tr>
+        </thead>
+        <tbody id="entryRows">
+          {% if page == 1 %}
+          <tr id="newRow" class="new-row">
+            <td class="text-muted small"><i class="bi bi-plus-lg"></i></td>
+            <td>
+              <select class="form-select form-select-sm cell-month">
+                <option value="">— חודש —</option>
+                {% for m in months %}
+                <option value="{{ m }}">{{ month_labels[m] }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-book">
+                <option value="">— ספר —</option>
+                {% for b in books %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-status">
+                <option value="">— סטטוס —</option>
                 {% for s in statuses %}
                 <option value="{{ s }}">{{ s }}</option>
                 {% endfor %}
               </select>
-            </div>
-            <div class="col">
-              <label class="form-label fw-semibold">סוג תנועה <span class="text-danger">*</span></label>
-              <select name="type" id="typeSelect" class="form-select" required>
-                <option value="">— בחר —</option>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-type">
+                <option value="">— סוג —</option>
                 {% for t in types %}
                 <option value="{{ t }}">{{ t }}</option>
                 {% endfor %}
               </select>
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">פריט <span class="text-danger">*</span></label>
-            <select name="item" class="form-select" required>
-              <option value="">— בחר פריט —</option>
-              {% for i in items %}
-              <option value="{{ i }}">{{ i }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">סכום (חיובי) <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <span class="input-group-text">₪</span>
-              <input type="number" name="amount" class="form-control" min="0.01"
-                     step="0.01" placeholder="0.00" required>
-            </div>
-            <div class="form-text" id="amountHint"></div>
-          </div>
-
-          <div class="mb-4">
-            <label class="form-label fw-semibold">הערות</label>
-            <input type="text" name="notes" class="form-control" placeholder="הערה אופציונלית">
-          </div>
-
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-save me-1"></i> שמור תנועה
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Recent entries -->
-  <div class="col-lg-7">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-light">
-        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>תנועות אחרונות</h5>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive" style="max-height: 520px; overflow-y: auto;" id="recentTable">
-          <table class="table table-sm table-hover mb-0">
-            <thead class="table-secondary">
-              <tr>
-                <th>#</th>
-                <th>חודש</th>
-                <th>ספר</th>
-                <th>פריט</th>
-                <th class="text-end">סכום</th>
-                <th>סטטוס</th>
-                <th>הוזן ע"י</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in recent %}
-              <tr>
-                <td class="text-muted small">{{ r['id'] }}</td>
-                <td class="small">{{ month_labels.get(r['month'], r['month']) }}</td>
-                <td class="small">{{ r['book'] }}</td>
-                <td class="small">{{ r['item'] }}</td>
-                <td class="text-end small {% if r['type']=='הכנסה' %}text-success{% else %}text-danger{% endif %}">
-                  {% if r['type']=='הוצאה' %}({% endif %}{{ "{:,.0f}".format(r['amount_positive']|float) }}{% if r['type']=='הוצאה' %}){% endif %}
-                </td>
-                <td><span class="badge status-badge-{{ r['status'] }}">{{ r['status'] }}</span></td>
-                <td class="small text-muted">{{ r['entered_by'] or '—' }}</td>
-                <td class="text-end">
-                  <a href="{{ url_for('edit_entry', tid=r['id']) }}" class="btn btn-xs btn-outline-secondary me-1" title="עריכה">
-                    <i class="bi bi-pencil"></i>
-                  </a>
-                  <form method="post" action="{{ url_for('delete_entry', tid=r['id']) }}"
-                        class="d-inline" onsubmit="return confirm('למחוק רשומה זו?')">
-                    <button class="btn btn-xs btn-outline-danger" title="מחיקה">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </form>
-                </td>
-              </tr>
-              {% else %}
-              <tr><td colspan="7" class="text-center text-muted py-3">אין נתונים</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% if total_pages > 1 %}
-        <div class="d-flex justify-content-center align-items-center gap-2 py-2">
-          {% if page > 1 %}
-          <a href="{{ url_for('entry', page=page-1) }}#recentTable" class="btn btn-sm btn-outline-secondary">→ הקודם</a>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-item">
+                <option value="">— פריט —</option>
+                {% for i in items %}
+                <option value="{{ i }}">{{ i }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input type="number" class="form-control form-control-sm cell-amount" min="0.01" step="0.01" placeholder="0.00">
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm cell-notes" placeholder="הערה אופציונלית">
+            </td>
+            <td class="text-muted small">—</td>
+            <td class="text-center save-status"></td>
+            <td></td>
+          </tr>
           {% endif %}
-          <span class="text-muted small">עמוד {{ page }} מתוך {{ total_pages }}</span>
-          {% if page < total_pages %}
-          <a href="{{ url_for('entry', page=page+1) }}#recentTable" class="btn btn-sm btn-outline-secondary">הבא ←</a>
+
+          {% for r in recent %}
+          <tr data-id="{{ r['id'] }}">
+            <td class="text-muted small">{{ r['id'] }}</td>
+            <td>
+              <select class="form-select form-select-sm cell-month">
+                {% for m in months %}
+                <option value="{{ m }}" {% if m==r['month'] %}selected{% endif %}>{{ month_labels[m] }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-book">
+                {% for b in books %}
+                <option value="{{ b }}" {% if b==r['book'] %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+                {% if r['book'] not in books %}
+                <option value="{{ r['book'] }}" selected>{{ r['book'] }}</option>
+                {% endif %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-status">
+                {% for s in statuses %}
+                <option value="{{ s }}" {% if s==r['status'] %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-type">
+                {% for t in types %}
+                <option value="{{ t }}" {% if t==r['type'] %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm cell-item">
+                {% for i in items %}
+                <option value="{{ i }}" {% if i==r['item'] %}selected{% endif %}>{{ i }}</option>
+                {% endfor %}
+                {% if r['item'] not in items %}
+                <option value="{{ r['item'] }}" selected>{{ r['item'] }}</option>
+                {% endif %}
+              </select>
+            </td>
+            <td>
+              <input type="number" class="form-control form-control-sm cell-amount" min="0.01" step="0.01" value="{{ r['amount_positive'] }}">
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm cell-notes" value="{{ r['notes'] or '' }}" placeholder="הערה אופציונלית">
+            </td>
+            <td class="small text-muted">{{ r['entered_by'] or '—' }}</td>
+            <td class="text-center save-status"></td>
+            <td class="text-center">
+              <button type="button" class="btn btn-xs btn-outline-danger row-delete" title="מחיקה">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          {% if page == 1 %}
+          <tr class="empty-hint"><td colspan="11" class="text-center text-muted py-3">אין עדיין רשומות — התחל להזין בשורה העליונה</td></tr>
           {% endif %}
-        </div>
-        {% endif %}
-      </div>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% if total_pages > 1 %}
+    <div class="d-flex justify-content-center align-items-center gap-2 py-2">
+      {% if page > 1 %}
+      <a href="{{ url_for('entry', page=page-1) }}" class="btn btn-sm btn-outline-secondary">→ הקודם</a>
+      {% endif %}
+      <span class="text-muted small">עמוד {{ page }} מתוך {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a href="{{ url_for('entry', page=page+1) }}" class="btn btn-sm btn-outline-secondary">הבא ←</a>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
 {% endblock %}
 {% block scripts %}
 <script>
-document.getElementById('typeSelect').addEventListener('change', function() {
-  const hint = document.getElementById('amountHint');
-  hint.textContent = this.value === 'הוצאה'
-    ? 'הסכום החשבונאי יירשם כשלילי אוטומטית'
-    : this.value === 'הכנסה' ? 'הסכום החשבונאי יירשם כחיובי' : '';
-});
+(function () {
+  const tbody = document.getElementById('entryRows');
+  const newRow = document.getElementById('newRow');
+  const DEBOUNCE_MS = 600;
+  const timers = new WeakMap();
+
+  function rowData(tr) {
+    return {
+      month: tr.querySelector('.cell-month').value,
+      book: tr.querySelector('.cell-book').value,
+      status: tr.querySelector('.cell-status').value,
+      type: tr.querySelector('.cell-type').value,
+      item: tr.querySelector('.cell-item').value,
+      amount: tr.querySelector('.cell-amount').value,
+      notes: tr.querySelector('.cell-notes').value,
+    };
+  }
+
+  function clearErrors(tr) {
+    tr.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+  }
+
+  function showErrors(tr, errors) {
+    const map = { month: '.cell-month', book: '.cell-book', status: '.cell-status',
+                  type: '.cell-type', item: '.cell-item', amount: '.cell-amount' };
+    Object.keys(errors).forEach(k => {
+      const el = tr.querySelector(map[k]);
+      if (el) { el.classList.add('is-invalid'); el.title = errors[k]; }
+    });
+  }
+
+  function setStatus(tr, state) {
+    const cell = tr.querySelector('.save-status');
+    if (!cell) return;
+    if (state === 'saving') {
+      cell.innerHTML = '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>';
+    } else if (state === 'saved') {
+      cell.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
+      setTimeout(() => { if (cell.innerHTML.includes('check-circle')) cell.innerHTML = ''; }, 2000);
+    } else if (state === 'error') {
+      cell.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger"></i>';
+    } else {
+      cell.innerHTML = '';
+    }
+  }
+
+  function isComposerReady(data) {
+    return data.month && data.book && data.status && data.type && data.item &&
+           data.amount && parseFloat(data.amount) > 0;
+  }
+
+  function resetNewRow() {
+    newRow.querySelectorAll('select').forEach(s => s.value = '');
+    newRow.querySelectorAll('input').forEach(i => i.value = '');
+    clearErrors(newRow);
+    setStatus(newRow, 'idle');
+  }
+
+  function buildRow(entry) {
+    const tr = document.createElement('tr');
+    tr.dataset.id = entry.id;
+    tr.innerHTML = `
+      <td class="text-muted small">${entry.id}</td>
+      <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+      <td class="small text-muted">${entry.entered_by || '—'}</td>
+      <td class="text-center save-status"></td>
+      <td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger row-delete" title="מחיקה"><i class="bi bi-trash"></i></button></td>
+    `;
+    // Clone select markup from the new-row template so option lists match.
+    const fieldMap = [['month', 'cell-month'], ['book', 'cell-book'], ['status', 'cell-status'],
+                       ['type', 'cell-type'], ['item', 'cell-item']];
+    const tds = tr.querySelectorAll('td');
+    fieldMap.forEach(([key, cls], i) => {
+      const src = newRow.querySelector('.' + cls).cloneNode(true);
+      src.querySelector('option[value=""]')?.remove();
+      src.value = entry[key];
+      tds[i + 1].appendChild(src);
+    });
+    const amountInput = document.createElement('input');
+    amountInput.type = 'number'; amountInput.min = '0.01'; amountInput.step = '0.01';
+    amountInput.className = 'form-control form-control-sm cell-amount';
+    amountInput.value = entry.amount;
+    tds[6].appendChild(amountInput);
+
+    const notesInput = document.createElement('input');
+    notesInput.type = 'text'; notesInput.className = 'form-control form-control-sm cell-notes';
+    notesInput.placeholder = 'הערה אופציונלית';
+    notesInput.value = entry.notes || '';
+    tds[7].appendChild(notesInput);
+
+    return tr;
+  }
+
+  async function createFromNewRow() {
+    const data = rowData(newRow);
+    setStatus(newRow, 'saving');
+    clearErrors(newRow);
+    try {
+      const res = await fetch('/api/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        showErrors(newRow, body.errors || {});
+        setStatus(newRow, 'error');
+        return;
+      }
+      const savedRow = buildRow(body);
+      newRow.insertAdjacentElement('afterend', savedRow);
+      document.querySelector('.empty-hint')?.remove();
+      resetNewRow();
+    } catch (e) {
+      setStatus(newRow, 'error');
+    }
+  }
+
+  async function updateRow(tr) {
+    const id = tr.dataset.id;
+    const data = rowData(tr);
+    setStatus(tr, 'saving');
+    clearErrors(tr);
+    try {
+      const res = await fetch(`/api/entries/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        showErrors(tr, body.errors || {});
+        setStatus(tr, 'error');
+        return;
+      }
+      setStatus(tr, 'saved');
+    } catch (e) {
+      setStatus(tr, 'error');
+    }
+  }
+
+  function scheduleSave(tr) {
+    if (timers.has(tr)) clearTimeout(timers.get(tr));
+    timers.set(tr, setTimeout(() => {
+      if (tr === newRow) {
+        const data = rowData(tr);
+        if (isComposerReady(data)) createFromNewRow();
+      } else {
+        updateRow(tr);
+      }
+    }, DEBOUNCE_MS));
+  }
+
+  tbody.addEventListener('input', e => {
+    if (e.target.matches('.cell-amount, .cell-notes')) {
+      scheduleSave(e.target.closest('tr'));
+    }
+  });
+
+  tbody.addEventListener('change', e => {
+    if (e.target.matches('select')) {
+      const tr = e.target.closest('tr');
+      if (timers.has(tr)) clearTimeout(timers.get(tr));
+      if (tr === newRow) {
+        const data = rowData(tr);
+        if (isComposerReady(data)) createFromNewRow();
+      } else {
+        updateRow(tr);
+      }
+    }
+  });
+
+  tbody.addEventListener('click', async e => {
+    const btn = e.target.closest('.row-delete');
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!confirm('למחוק רשומה זו?')) return;
+    const id = tr.dataset.id;
+    try {
+      const res = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        tr.style.opacity = '0';
+        setTimeout(() => tr.remove(), 150);
+      }
+    } catch (e) {}
+  });
+})();
 </script>
 {% endblock %}
